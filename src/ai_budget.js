@@ -93,7 +93,7 @@ export async function requestGemini(env, model, payload, unavailableMessage) {
   try {
     response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
       method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
-      body, signal: AbortSignal.timeout(25000)
+      body, redirect: "error", signal: AbortSignal.timeout(25000)
     });
   } catch {
     await recordCircuitFailure(env, probeToken);

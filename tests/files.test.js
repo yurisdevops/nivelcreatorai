@@ -6,7 +6,7 @@ import { filesHandler } from "../src/files.js";
 const workspaceId = "workspace-upload-test";
 
 function uploadEnvironment() {
-  const state = { used: 0, queries: [], objects: [] };
+  const state = { used: 0, queries: [], objects: [], batches: [] };
   const db = {
     state,
     prepare(sql) {
@@ -28,6 +28,7 @@ function uploadEnvironment() {
       return statement;
     },
     async batch(statements) {
+      state.batches.push(statements.map(({ sql, params }) => ({ sql, params })));
       for (const statement of statements) {
         if (statement.sql.includes("INSERT INTO files")) state.used += statement.params[4];
       }
@@ -88,6 +89,19 @@ test("upload stores a valid PDF under a server-generated private key and strips 
   assert.equal(env.scannerCalls[0].headers.get("x-file-scanner-secret"), env.FILE_SCANNER_SECRET);
   assert.deepEqual(new Uint8Array(await env.scannerCalls[0].arrayBuffer()), bytes);
   assert.equal(env.state.queries.length > 0, true);
+});
+
+test("SQL metacharacters in a file name remain a bound value and do not alter the query", async () => {
+  const env = uploadEnvironment();
+  const name = "'; DROP TABLE files;--.pdf";
+  const bytes = new TextEncoder().encode("%PDF-1.7\nconteúdo de teste");
+  await filesHandler(uploadRequest({ name, bytes }), env, "/api/files", { workspace_id: workspaceId });
+
+  const insert = env.state.batches.flat().find(({ sql }) => sql.includes("INSERT INTO files"));
+  assert.ok(insert);
+  assert.equal(insert.params[5], name);
+  assert.equal(insert.sql.includes(name), false);
+  assert.equal(env.state.objects.length, 1);
 });
 
 test("upload fails closed when the private malware scanner is not configured", async () => {

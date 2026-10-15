@@ -43,7 +43,7 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 7. Gere um segredo aleatório de pelo menos 32 bytes e configure o mesmo valor como `FILE_SCANNER_SECRET` no `.dev.vars` do app e em `scanner/.dev.vars`. Em produção, use `npx wrangler secret put FILE_SCANNER_SECRET` para cada Worker.
 8. Rode `npm run dev` e abra `http://localhost:8787`.
 
-Rode `npm test` para executar os testes de sessão/MFA/CSRF, BOLA entre workspaces, validação de assinatura/tamanho/nome e varredura de arquivo, além dos testes de cobrança, entitlement e entrega de notificações disponíveis no projeto.
+Rode `npm test` para executar os testes de sessão/MFA/CSRF, BOLA entre workspaces, validação de assinatura/tamanho/nome e varredura de arquivo, prompt injection no briefing, destinos de rede permitidos, SQL injection no nome do arquivo e os testes de cobrança, entitlement e entrega de notificações disponíveis no projeto.
 
 Crie também o bucket privado usado pela Biblioteca com `npx wrangler r2 bucket create nivel-creator-private`. A configuração não publica o bucket; uploads, downloads e exclusões passam pelo Worker autenticado. O app valida a assinatura do conteúdo e encaminha cada upload para o service binding privado do scanner, que consulta o ClamAV antes de permitir qualquer gravação em R2. Se o scanner estiver ausente, indisponível ou retornar uma resposta inválida, o upload falha fechado. O app não envia o conteúdo do arquivo a um fornecedor externo de antivírus.
 
