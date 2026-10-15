@@ -28,6 +28,92 @@ function openOnboarding() {
   dialog.showModal();
 }
 
+const notificationPopover = document.querySelector('#notification-popover');
+
+function renderNotifications(notifications, unreadCount) {
+  const list = document.querySelector('#notification-list');
+  list.replaceChildren();
+  document.querySelector('#notification-badge').hidden = unreadCount === 0;
+  document.querySelector('#notification-badge').textContent = unreadCount > 9 ? '9+' : String(unreadCount);
+  if (!notifications.length) {
+    const empty = document.createElement('p');
+    empty.className = 'notification-empty';
+    empty.textContent = 'Você está em dia.';
+    list.append(empty);
+    return;
+  }
+  for (const item of notifications) {
+    const card = document.createElement('article');
+    card.className = `notification-item${item.read_at ? '' : ' notification-unread'}`;
+    const title = document.createElement('b');
+    title.textContent = item.content.title || 'Atualização da sua conta';
+    const body = document.createElement('p');
+    body.textContent = item.content.body || '';
+    const time = document.createElement('small');
+    time.textContent = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(item.created_at));
+    card.append(title, body, time);
+    if (!item.read_at) {
+      const read = document.createElement('button');
+      read.className = 'notification-read';
+      read.type = 'button';
+      read.textContent = 'Marcar como lida';
+      read.addEventListener('click', () => markNotificationRead(item.id));
+      card.append(read);
+    }
+    list.append(card);
+  }
+}
+
+async function loadNotifications() {
+  try {
+    const result = await fetch('/api/notifications', { credentials: 'same-origin' });
+    if (!result.ok) return;
+    const data = await result.json();
+    renderNotifications(data.notifications, data.unread_count);
+    document.querySelector('#notification-enabled').checked = data.preferences.in_app_enabled;
+  } catch { /* Notifications are optional when the service is unavailable. */ }
+}
+
+async function markNotificationRead(id) {
+  try {
+    const result = await fetch(`/api/notifications/${encodeURIComponent(id)}/read`, { method: 'PUT', credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' }, body: '{}' });
+    const data = await result.json();
+    if (!result.ok) throw new Error(data.error || 'Não foi possível atualizar a notificação.');
+    await loadNotifications();
+  } catch (error) { announce(error.message || 'Não foi possível atualizar a notificação.'); }
+}
+
+document.querySelector('#notification-toggle').addEventListener('click', async () => {
+  const open = notificationPopover.hidden;
+  notificationPopover.hidden = !open;
+  document.querySelector('#notification-toggle').setAttribute('aria-expanded', String(open));
+  if (open) await loadNotifications();
+});
+
+document.querySelector('#notification-read-all').addEventListener('click', async () => {
+  try {
+    const result = await fetch('/api/notifications/read-all', { method: 'POST', credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' }, body: '{}' });
+    if (!result.ok) throw new Error('Não foi possível marcar as notificações como lidas.');
+    await loadNotifications();
+  } catch (error) { announce(error.message || 'Não foi possível atualizar as notificações.'); }
+});
+
+document.querySelector('#notification-enabled').addEventListener('change', async (event) => {
+  const enabled = event.currentTarget.checked;
+  try {
+    const result = await fetch('/api/notifications/preferences', { method: 'PUT', credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify({ in_app_enabled: enabled }) });
+    const data = await result.json();
+    if (!result.ok) throw new Error(data.error || 'Não foi possível salvar sua preferência.');
+    announce(enabled ? 'Notificações internas ativadas.' : 'Notificações internas pausadas.');
+  } catch (error) {
+    event.currentTarget.checked = !enabled;
+    announce(error.message || 'Não foi possível salvar sua preferência.');
+  }
+});
+
 document.querySelectorAll('[data-open-onboarding]').forEach((button) => button.addEventListener('click', openOnboarding));
 document.querySelector('#cancel-onboarding').addEventListener('click', () => dialog.close());
 
@@ -761,6 +847,7 @@ async function loadAccount() {
         openOnboarding();
       }
       await loadHomeDashboard();
+      await loadNotifications();
       return;
     }
     document.querySelector('#current-workspace').textContent = 'Prévia do painel';

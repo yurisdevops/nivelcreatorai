@@ -18,6 +18,7 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 - Planejamento editorial semanal via Gemini, histórico privado, sugestões revisáveis, envio idempotente da pauta ao calendário e quota de 1 plano no trial e 4 por ciclo pago.
 - Calendário privado com fluxo de conteúdo em etapas e campanhas UGC para registrar marcas, entregáveis, prazos e status.
 - Agente pessoal com histórico por workspace e quota (30 mensagens no trial, 200 no pago); conteúdo de conversa não autoriza ações externas.
+- Notificações internas de encerramento do trial, agendadas por Cron com deduplicação; leitura e pausa por workspace.
 - Migrações D1 versionadas para dados centrais, calendário, agente, consentimento de IA, planos editoriais e preferências de notificações.
 - Cabeçalhos básicos de segurança, CSP sem scripts inline, validação de origem e limite de corpo nas rotas JSON.
 
@@ -42,6 +43,7 @@ Supabase recomenda validar JWTs com `getClaims` ou validar o token no Auth serve
 
 - OAuth e permissões revisadas para Instagram profissional, armazenamento criptografado de tokens e importação de métricas permitidas; até lá, métricas e diagnósticos exibem estados sem dados.
 - Aprovisionar e configurar os recursos reais de Supabase, D1 e Gemini para o ambiente de beta.
+- E-mail transacional para notificações continua desativado até configurar um provedor e preferências de envio.
 - Arquivos privados via R2 com limites, verificação de conteúdo e URLs curtas.
 - Asaas em sandbox: checkout, webhooks autenticados, deduplicação e reconciliação.
 - MFA para administradores, exportação/exclusão de dados, rotina de retenção, backups restauráveis, limites de tráfego/custo e observabilidade operacional.

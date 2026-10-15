@@ -11,6 +11,7 @@ import { campaignsHandler } from "./campaigns.js";
 import { diagnosticsHandler } from "./diagnostics.js";
 import { planningHandler } from "./planning.js";
 import { dashboardHandler } from "./dashboard.js";
+import { notificationCronHandler, notificationHandler } from "./notifications.js";
 
 const securityHeaders = {
   "content-security-policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'",
@@ -184,6 +185,15 @@ export default {
         if (result) return response(result, 200, cookies);
       }
 
+      if (url.pathname.startsWith("/api/notifications")) {
+        if (!isProviderConfigured(env)) throw new AuthError(503, "Configure Supabase Auth e D1 para acessar notificações.");
+        const { user, cookies } = await requireUser(request, env);
+        const workspace = await getWorkspace(env, user.id);
+        if (!workspace) throw new AuthError(404, "Seu espaço ainda não foi preparado.");
+        const result = await notificationHandler(request, env, url.pathname, workspace);
+        if (result) return response(result, 200, cookies);
+      }
+
       if (url.pathname.startsWith("/api/diagnostics")) {
         if (!isProviderConfigured(env)) throw new AuthError(503, "Configure Supabase Auth e D1 para acessar diagnósticos.");
         const { user, cookies } = await requireUser(request, env);
@@ -220,5 +230,8 @@ export default {
       }
       return response({ error: "Não foi possível concluir a solicitação." }, 500);
     }
+  },
+  async scheduled(_event, env, ctx) {
+    ctx.waitUntil(notificationCronHandler(env));
   }
 };
