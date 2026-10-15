@@ -25,7 +25,7 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 - Biblioteca privada em R2, com verificação de assinatura e varredura ClamAV em Worker/Container privado antes de gravar o arquivo, limite de 25 MB por upload, quota atômica de 250 MB no trial e 2 GB no plano pago, downloads autenticados e exclusão com trilha de auditoria.
 - Planejamento editorial semanal via Gemini, histórico privado, sugestões revisáveis, envio idempotente da pauta ao calendário e quota de 1 plano no trial e 4 por ciclo pago.
 - Calendário privado com fluxo de conteúdo em etapas e campanhas UGC para registrar marcas, entregáveis, prazos e status.
-- Agente pessoal com histórico por workspace e quota (30 mensagens no trial, 200 no pago); conteúdo de conversa não autoriza ações externas.
+- Agente pessoal com histórico por workspace e quota (30 mensagens no trial, 200 no pago); respostas citam métricas disponíveis do próprio workspace com período e origem; conteúdo de conversa não autoriza ações externas.
 - Notificações internas de encerramento do trial, agendadas por Cron com deduplicação; leitura e pausa por workspace.
 - Configurações de perfil e consentimento, exportação JSON do workspace e solicitação de exclusão com remoção do usuário Auth por tarefa agendada.
 - Retenção automática opcional após 30 dias sem acesso vigente, com aviso no app sete dias antes, proteção de assinaturas ativas e tabela operacional para retenções legais; vem desativada até a aprovação e habilitação da política.
@@ -38,7 +38,7 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 1. Instale Node.js 22 ou superior e, nesta pasta, rode `npm install`.
 2. Crie um projeto Supabase exclusivo para o Nivel Creator AI. Ative confirmação de e-mail e adicione `http://localhost:8787/auth/callback` às URLs de redirecionamento permitidas. Em Authentication → MFA, habilite TOTP e permita verificação de fatores; creators podem ativar em Configurações → Segurança da conta. Um usuário cujo papel em `memberships` seja `admin` será encaminhado para cadastrar TOTP no próximo login.
 3. Copie `.dev.vars.example` para `.dev.vars` e preencha `SUPABASE_URL`, `SUPABASE_ANON_KEY` e `GEMINI_API_KEY` com credenciais próprias. Nunca coloque credenciais de serviço no navegador nem versionadas no Git.
-4. A base D1 remota exclusiva `nivel-creator` e o bucket R2 privado `nivel-creator-private` já foram provisionados para este projeto; o `database_id` está registrado em `wrangler.jsonc`. As 14 migrações atuais foram aplicadas e verificadas na D1 remota. Para desenvolvimento local, rode `npm run db:local`.
+4. A base D1 remota exclusiva `nivel-creator` e o bucket R2 privado `nivel-creator-private` já foram provisionados para este projeto; o `database_id` está registrado em `wrangler.jsonc`. As 15 migrações foram aplicadas à D1 remota. Para desenvolvimento local, rode `npm run db:local`.
 5. Aplique o esquema local: `npm run db:local` (inclui o controle global diário de IA).
 6. Configure e inicie o Worker do scanner em `scanner/` antes do app. O scanner usa Docker e uma instância Cloudflare Container `standard-1` (4 GiB de memória) com a imagem oficial ClamAV; em desenvolvimento, rode `npx wrangler dev --config scanner/wrangler.jsonc` com Docker disponível. A publicação ainda depende de Docker CLI e daemon acessíveis.
 7. Gere um segredo aleatório de pelo menos 32 bytes e configure o mesmo valor como `FILE_SCANNER_SECRET` no `.dev.vars` do app e em `scanner/.dev.vars`. Em produção, use `npx wrangler secret put FILE_SCANNER_SECRET` para cada Worker.
@@ -74,7 +74,7 @@ Supabase recomenda validar JWTs com `getClaims` ou validar o token no Auth serve
 - Aprovação jurídica da política de retenção, backups restauráveis e observabilidade operacional. Os rate limits do Worker são distribuídos por localização Cloudflare e permissivos; não substituem o teto global diário nem servem como contabilidade exata.
 - Revisão jurídica, LGPD, segurança e testes descritos na especificação mestre.
 
-O procedimento operacional atual para backup e recuperação de D1/R2 está em [`docs/backup-and-restore.md`](docs/backup-and-restore.md). A D1 e o R2 exclusivos do Nivel Creator AI já existem na Cloudflare e as 14 migrações foram verificadas; o Worker, o scanner e a restauração real ainda não foram validados.
+O procedimento operacional atual para backup e recuperação de D1/R2 está em [`docs/backup-and-restore.md`](docs/backup-and-restore.md). A D1 e o R2 exclusivos do Nivel Creator AI já existem na Cloudflare e as 15 migrações foram verificadas; o Worker, o scanner e a restauração real ainda não foram validados.
 
 O fluxo de OAuth do Instagram está implementado, mas o app Meta ainda não foi aprovado nem conectado a uma conta real. Não há conexão com a conta Asaas ou Nivel Studio e o produto não publica conteúdo automaticamente. A conexão Supabase disponível lista zero projetos; o projeto exclusivo do Nivel Creator AI e suas credenciais ainda não estão configurados. As migrações estão aplicadas ao D1 local e ao D1 remoto exclusivo.
 

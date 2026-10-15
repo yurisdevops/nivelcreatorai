@@ -43,3 +43,4 @@ body{background:radial-gradient(ellipse at 64% 0,#11163a 0,#070d20 43%,#060a17 1
 .onboarding-actions{margin-top:23px}
 .onboarding-actions-spacer{flex:1}
 @media(max-width:500px){.onboarding-dialog{max-height:calc(100% - 24px);overflow:auto}.dialog-content{padding:20px}.onboarding-step h2{font-size:20px}.onboarding-actions{flex-wrap:wrap}.onboarding-actions .button{padding:0 11px}}
+.message-sources{margin-top:9px;padding-top:8px;border-top:1px solid #293960;color:#9eafd2}.message-sources small{font:600 9px Manrope;color:#a987ff}.message-sources ul{margin:5px 0 0;padding-left:16px}.message-sources li{font-size:9px;line-height:1.5;overflow-wrap:anywhere}

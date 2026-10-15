@@ -3,14 +3,21 @@ import assert from "node:assert/strict";
 import { agentHandler } from "../src/agent.js";
 
 function agentEnvironment(profile) {
-  const state = { batches: [], requests: [] };
+  const state = { batches: [], requests: [], queries: [] };
   const DB = {
     prepare(sql) {
       return {
         sql,
         values: [],
         bind(...values) { this.values = values; return this; },
-        async all() { return { results: [] }; },
+        async all() {
+          state.queries.push({ sql, values: this.values });
+          if (sql.includes("FROM metric_snapshots")) return { results: [
+            { metric: "reach", period_start: "2026-10-01", period_end: "2026-10-14", value: 4200, source: "instagram", fetched_at: "2026-10-15T10:00:00.000Z" },
+            { metric: "reach", period_start: "2026-09-15", period_end: "2026-09-30", value: 3900, source: "instagram", fetched_at: "2026-10-01T10:00:00.000Z" }
+          ] };
+          return { results: [] };
+        },
         async first() {
           if (sql.includes("SELECT t.starts_at")) return {
             trial_start: new Date(Date.now() - 60_000).toISOString(),
@@ -51,7 +58,9 @@ test("editable creator profile stays user data instead of entering Gemini system
   globalThis.fetch = async (input, init) => {
     env.state.requests.push({ url: new URL(input), init, payload: JSON.parse(init.body) });
     return Response.json({
-      candidates: [{ content: { parts: [{ text: "Posso ajudar sem acessar outros workspaces." }] } }],
+      candidates: [{ content: { parts: [{ text: JSON.stringify({
+        answer: "Seu alcance recente foi de 4.200.", citations: ["metrica-1", "metrica-1", "outro-workspace"]
+      }) }] } }],
       usageMetadata: { promptTokenCount: 100, totalTokenCount: 150 }
     });
   };
@@ -73,7 +82,18 @@ test("editable creator profile stays user data instead of entering Gemini system
     assert.equal(payload.contents.at(-1).role, "user");
     assert.equal(context.creator_profile.niche, injectedText);
     assert.equal(context.message, "Me dê uma ideia para hoje.");
+    assert.deepEqual(context.sources.map(({ id }) => id), ["perfil", "metrica-1"]);
+    assert.match(payload.contents.at(-1).parts[0].text, /2026-10-01 a 2026-10-14/);
+    assert.match(env.state.requests[0].payload.generationConfig.responseMimeType, /application\/json/);
     assert.deepEqual(result.messages.map(({ role }) => role), ["user", "assistant"]);
+    assert.equal(result.messages[1].content, "Seu alcance recente foi de 4.200.");
+    assert.deepEqual(result.messages[1].sources.map(({ id }) => id), ["metrica-1"]);
+    const sourceInsert = env.state.batches[0][1];
+    assert.match(sourceInsert.sql, /sources_json/);
+    assert.equal(JSON.parse(sourceInsert.values[3])[0].id, "metrica-1");
+    const metricsQuery = env.state.queries.find(({ sql }) => sql.includes("FROM metric_snapshots"));
+    assert.ok(metricsQuery.sql.includes("workspace_id=?1"));
+    assert.equal(metricsQuery.values[0], "workspace-agent-test");
   } finally {
     globalThis.fetch = originalFetch;
   }

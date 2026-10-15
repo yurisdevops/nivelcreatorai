@@ -983,6 +983,20 @@ function renderAgentMessages(messages) {
     const content = document.createElement('p');
     content.textContent = message.content;
     bubble.append(author, content);
+    if (message.role === 'assistant' && Array.isArray(message.sources) && message.sources.length) {
+      const sources = document.createElement('div');
+      sources.className = 'message-sources';
+      const label = document.createElement('small');
+      label.textContent = 'Fontes consultadas';
+      const list = document.createElement('ul');
+      for (const source of message.sources) {
+        const item = document.createElement('li');
+        item.textContent = `${source.title}: ${source.detail}`;
+        list.append(item);
+      }
+      sources.append(label, list);
+      bubble.append(sources);
+    }
     area.append(bubble);
   }
   area.scrollTop = area.scrollHeight;
