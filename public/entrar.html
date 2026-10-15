@@ -25,6 +25,8 @@
           <input id="email" name="email" type="email" autocomplete="email" maxlength="254" required placeholder="voce@email.com">
           <label for="password">Senha</label>
           <input id="password" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" required placeholder="Pelo menos 8 caracteres">
+          <button class="forgot-password" id="forgot-password" type="button">Esqueci minha senha</button>
+          <div id="confirm-password-group" hidden><label for="confirm-password">Confirme a nova senha</label><input id="confirm-password" type="password" autocomplete="new-password" minlength="8" maxlength="128"></div>
           <p class="form-message" id="form-message" role="status" aria-live="polite"></p>
           <button class="submit-button" id="submit-button" type="submit">Entrar <span>→</span></button>
         </form>

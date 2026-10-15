@@ -1,10 +1,14 @@
 import {
   AuthError, accessTokenFromRequest, assertSameOrigin, authConfigured, authResponseError,
   clearSessionCookies, readJson, requireUser, sessionFromResponse, signIn, signOut,
-  signUp, validCredentials, verifyEmail
+  signUp, validCredentials, verifyEmail, recoverPassword, updatePassword
 } from "./auth.js";
 import { cleanProfileInput, ensureWorkspace, getWorkspace, saveProfile } from "./account.js";
 import { creativeHandler } from "./creative.js";
+import { calendarHandler } from "./calendar.js";
+import { agentHandler } from "./agent.js";
+import { campaignsHandler } from "./campaigns.js";
+import { diagnosticsHandler } from "./diagnostics.js";
 
 const securityHeaders = {
   "content-security-policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'",
@@ -63,6 +67,34 @@ async function authHandler(request, env, path) {
     return response({ ok: true }, 200, sessionFromResponse(payload));
   }
 
+  if (path === "/api/auth/recover" && request.method === "POST") {
+    if (!isProviderConfigured(env)) throw new AuthError(503, "Configure Supabase Auth e D1 para recuperar o acesso.");
+    assertSameOrigin(request);
+    const body = await readJson(request);
+    const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+    if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new AuthError(400, "Informe um e-mail válido.");
+    const callback = new URL("/auth/callback", request.url).toString();
+    const result = await recoverPassword(env, email, `${callback}?type=recovery`);
+    if (result.status === 429) throw authResponseError(result.status);
+    if (!result.ok && result.status >= 500) throw authResponseError(result.status);
+    // Do not reveal whether an account exists for this address.
+    return response({ accepted: true });
+  }
+
+  if (path === "/api/auth/password" && request.method === "POST") {
+    if (!isProviderConfigured(env)) throw new AuthError(503, "Configure Supabase Auth e D1 para atualizar a senha.");
+    assertSameOrigin(request);
+    const body = await readJson(request);
+    const password = typeof body.password === "string" ? body.password : "";
+    if (password.length < 8 || password.length > 128) throw new AuthError(400, "A nova senha deve ter entre 8 e 128 caracteres.");
+    const { user, accessToken } = await requireUser(request, env);
+    if (!accessToken) throw new AuthError(401, "Abra o link de recuperação novamente para continuar.");
+    const result = await updatePassword(env, accessToken, password);
+    if (!result.ok) throw authResponseError(result.status);
+    await signOut(env, accessToken);
+    return response({ updated: true, user: user.id }, 200, clearSessionCookies());
+  }
+
   if (path === "/api/auth/logout" && request.method === "POST") {
     assertSameOrigin(request);
     await signOut(env, accessTokenFromRequest(request));
@@ -78,7 +110,7 @@ async function callbackHandler(request, env) {
   const url = new URL(request.url);
   const tokenHash = url.searchParams.get("token_hash");
   const type = url.searchParams.get("type");
-  if (!tokenHash || tokenHash.length > 2048 || !["signup", "email", "magiclink"].includes(type)) {
+  if (!tokenHash || tokenHash.length > 2048 || !["signup", "email", "magiclink", "recovery"].includes(type)) {
     return redirect(request, "/entrar.html?erro=confirmacao");
   }
   try {
@@ -89,6 +121,7 @@ async function callbackHandler(request, env) {
       return redirect(request, "/entrar.html?verificado=1");
     }
     await ensureWorkspace(env, payload.user);
+    if (type === "recovery") return redirect(request, "/entrar.html?redefinir=1", sessionFromResponse(payload));
     return redirect(request, "/", sessionFromResponse(payload));
   } catch {
     return redirect(request, "/entrar.html?erro=confirmacao");
@@ -109,7 +142,8 @@ async function accountHandler(request, env, path) {
     return response({
       user: { id: user.id, email: user.email },
       workspace: { name: account.workspace_name },
-      profile: { niche: account.niche, goals: JSON.parse(account.goals_json), voice: account.voice, completed: Boolean(account.onboarding_completed_at) },
+      profile: { niche: account.niche, goals: JSON.parse(account.goals_json), voice: account.voice,
+        completed: Boolean(account.onboarding_completed_at), ai_consent: Boolean(account.ai_data_consent_at) },
       trial: { status: account.trial_status, starts_at: account.trial_starts_at, ends_at: account.trial_ends_at }
     }, 200, cookies);
   }
@@ -139,12 +173,25 @@ export default {
       const account = await accountHandler(request, env, url.pathname);
       if (account) return account;
 
-      if (url.pathname.startsWith("/api/creative/")) {
-        if (!isProviderConfigured(env)) throw new AuthError(503, "Configure Supabase Auth e D1 para usar o Estúdio Criativo.");
+      if (url.pathname.startsWith("/api/diagnostics")) {
+        if (!isProviderConfigured(env)) throw new AuthError(503, "Configure Supabase Auth e D1 para acessar diagnósticos.");
         const { user, cookies } = await requireUser(request, env);
         const workspace = await getWorkspace(env, user.id);
         if (!workspace) throw new AuthError(404, "Seu espaço ainda não foi preparado.");
-        const result = await creativeHandler(request, env, url.pathname, workspace);
+        const result = await diagnosticsHandler(request, env, url.pathname, workspace);
+        if (result) return response(result, 200, cookies);
+      }
+
+      if (url.pathname.startsWith("/api/creative/") || url.pathname.startsWith("/api/calendar/") ||
+          url.pathname.startsWith("/api/agent/") || url.pathname.startsWith("/api/campaigns")) {
+        if (!isProviderConfigured(env)) throw new AuthError(503, "Configure Supabase Auth e D1 para usar esta área.");
+        const { user, cookies } = await requireUser(request, env);
+        const workspace = await getWorkspace(env, user.id);
+        if (!workspace) throw new AuthError(404, "Seu espaço ainda não foi preparado.");
+        let result = await creativeHandler(request, env, url.pathname, workspace);
+        if (!result) result = await calendarHandler(request, env, url.pathname, workspace);
+        if (!result) result = await agentHandler(request, env, url.pathname, workspace);
+        if (!result) result = await campaignsHandler(request, env, url.pathname, workspace);
         if (result) return response(result, 200, cookies);
       }
 

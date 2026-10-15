@@ -41,6 +41,7 @@ export async function getWorkspace(env, userId) {
   const db = requireDatabase(env);
   const account = await db.prepare(`SELECT w.id AS workspace_id, w.name AS workspace_name,
       p.niche, p.goals_json, p.voice, p.onboarding_completed_at,
+      p.ai_data_consent_at,
       t.starts_at AS trial_starts_at, t.ends_at AS trial_ends_at, t.status AS trial_status
     FROM users u
     JOIN memberships m ON m.user_id=u.id AND m.role='owner'
@@ -58,7 +59,7 @@ export function cleanProfileInput(body) {
   if (niche.length > 100 || voice.length > 500 || goals.length > 5) throw new AuthError(400, "Revise os limites dos campos do perfil.");
   const safeGoals = goals.map((goal) => typeof goal === "string" ? goal.trim() : "").filter((goal) => goal && goal.length <= 100);
   if (safeGoals.length !== goals.length) throw new AuthError(400, "Revise os objetivos informados.");
-  return { niche, voice, goals: safeGoals };
+  return { niche, voice, goals: safeGoals, aiConsent: body.ai_consent === true };
 }
 
 export async function saveProfile(env, userId, profile) {
@@ -67,12 +68,14 @@ export async function saveProfile(env, userId, profile) {
   const result = await db.prepare(`UPDATE creator_profiles
     SET niche=?1, voice=?2, goals_json=?3,
         onboarding_completed_at=COALESCE(?4, onboarding_completed_at),
+        ai_data_consent_at=CASE WHEN ?5=1 THEN COALESCE(ai_data_consent_at,strftime('%Y-%m-%dT%H:%M:%fZ','now')) ELSE NULL END,
+        ai_data_consent_version=CASE WHEN ?5=1 THEN 'ai-data-2026-10-15' ELSE NULL END,
         updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
     WHERE workspace_id IN (
       SELECT m.workspace_id FROM memberships m
       JOIN users u ON u.id=m.user_id
       JOIN workspaces w ON w.id=m.workspace_id AND w.owner_id=u.id
-      WHERE u.auth_subject=?5 AND m.role='owner'
-    )`).bind(profile.niche || null, profile.voice || null, JSON.stringify(profile.goals), completed, userId).run();
+      WHERE u.auth_subject=?6 AND m.role='owner'
+    )`).bind(profile.niche || null, profile.voice || null, JSON.stringify(profile.goals), completed, profile.aiConsent ? 1 : 0, userId).run();
   if (!result.meta?.changes) throw new AuthError(404, "Seu espaço não foi encontrado.");
 }

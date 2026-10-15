@@ -72,6 +72,14 @@ export async function signIn(env, email, password) {
   return authFetch(env, "/auth/v1/token?grant_type=password", { method: "POST", body: { email, password } });
 }
 
+export async function recoverPassword(env, email, redirectTo) {
+  return authFetch(env, `/auth/v1/recover?redirect_to=${encodeURIComponent(redirectTo)}`, { method: "POST", body: { email } });
+}
+
+export async function updatePassword(env, accessToken, password) {
+  return authFetch(env, "/auth/v1/user", { method: "PUT", body: { password }, accessToken });
+}
+
 export async function verifyEmail(env, tokenHash, type) {
   return authFetch(env, "/auth/v1/verify", { method: "POST", body: { token_hash: tokenHash, type } });
 }
@@ -101,7 +109,7 @@ export async function requireUser(request, env) {
 
   if (accessToken) {
     const user = await getUser(env, accessToken);
-    if (user?.id && user.email_confirmed_at) return { user, cookies: [] };
+    if (user?.id && user.email_confirmed_at) return { user, cookies: [], accessToken };
   }
 
   if (!refreshToken) throw new AuthError();
@@ -112,7 +120,7 @@ export async function requireUser(request, env) {
   if (!response.ok) throw authResponseError(response.status);
   const session = await response.json();
   if (!session?.user?.id || !session.user.email_confirmed_at) throw new AuthError();
-  return { user: session.user, cookies: sessionCookies(session) };
+  return { user: session.user, cookies: sessionCookies(session), accessToken: session.access_token };
 }
 
 export function accessTokenFromRequest(request) {

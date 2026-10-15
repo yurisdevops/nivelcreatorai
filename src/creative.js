@@ -115,7 +115,7 @@ export async function creativeHandler(request, env, path, account) {
   if (path === "/api/creative/generate" && request.method !== "POST") throw new AuthError(405, "Método não permitido.");
   if (!env.DB) throw new AuthError(503, "O banco de dados ainda não foi configurado.");
   if (path.endsWith("/generate")) assertSameOrigin(request);
-  const profile = await env.DB.prepare(`SELECT niche, goals_json, voice FROM creator_profiles
+  const profile = await env.DB.prepare(`SELECT niche, goals_json, voice, ai_data_consent_at FROM creator_profiles
     WHERE workspace_id=?1`).bind(account.workspace_id).first();
   if (!profile) throw new AuthError(404, "Seu perfil de creator não foi encontrado.");
   if (request.method === "GET") {
@@ -127,6 +127,7 @@ export async function creativeHandler(request, env, path, account) {
   }
 
   const { brief, format } = cleanBrief(await readJson(request));
+  if (!profile.ai_data_consent_at) throw new AuthError(403, "Autorize o envio do perfil e do briefing escolhido ao Gemini no seu perfil para usar a geração por IA.");
   if (!env.GEMINI_API_KEY) throw new AuthError(503, "A geração por IA ainda não foi configurada.");
   const access = await resolveEntitlement(env, account.workspace_id);
   const reservationId = await reserveQuota(env, account.workspace_id, access, OPERATION);
