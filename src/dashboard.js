@@ -7,10 +7,19 @@ function parseJson(value, fallback) {
 }
 
 export async function dashboardHandler(request, env, path, account) {
-  if (path !== "/api/dashboard") return null;
+  if (path !== "/api/dashboard" && path !== "/api/results") return null;
   if (request.method !== "GET") throw new AuthError(405, "Método não permitido.");
   const db = env.DB;
   const workspaceId = account.workspace_id;
+  if (path === "/api/results") {
+    const url = new URL(request.url);
+    const requestedDays = Number(url.searchParams.get("days") || 30);
+    const days = [7, 30, 90].includes(requestedDays) ? requestedDays : 30;
+    const history = await db.prepare(`SELECT metric, period_start, period_end, value, source, fetched_at, availability
+      FROM metric_snapshots WHERE workspace_id=?1 AND julianday(fetched_at)>=julianday('now', ?2)
+      ORDER BY fetched_at DESC LIMIT 500`).bind(workspaceId, `-${days} days`).all();
+    return { days, snapshots: history.results || [] };
+  }
   const [metricRows, strategy, upcoming, trial] = await Promise.all([
     db.prepare(`SELECT metric, period_start, period_end, value, source, fetched_at, availability
       FROM metric_snapshots WHERE workspace_id=?1 ORDER BY fetched_at DESC LIMIT 100`).bind(workspaceId).all(),

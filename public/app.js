@@ -8,6 +8,7 @@ const moduleViews = {
   planejamento: document.querySelector('#view-planejamento'),
   calendario: document.querySelector('#view-calendario'),
   biblioteca: document.querySelector('#view-biblioteca'),
+  resultados: document.querySelector('#view-resultados'),
   campanhas: document.querySelector('#view-campanhas'),
   agente: document.querySelector('#view-agente'),
   configuracoes: document.querySelector('#view-configuracoes')
@@ -171,11 +172,11 @@ viewLinks.forEach((link) => link.addEventListener('click', (event) => {
   }
 }));
 
-const moduleLoaded = { roteiros: false, diagnostico: false, planejamento: false, calendario: false, biblioteca: false, campanhas: false, agente: false, configuracoes: false };
+const moduleLoaded = { roteiros: false, diagnostico: false, planejamento: false, calendario: false, biblioteca: false, resultados: false, campanhas: false, agente: false, configuracoes: false };
 function showModule(name) {
   homeSections.forEach((element) => { element.hidden = true; });
   Object.entries(moduleViews).forEach(([key, element]) => { element.hidden = key !== name; });
-  const labels = { roteiros: 'Estúdio Criativo', diagnostico: 'Diagnóstico IA', planejamento: 'Planejamento', calendario: 'Calendário', biblioteca: 'Biblioteca', campanhas: 'Campanhas UGC', agente: 'Agente pessoal', configuracoes: 'Configurações' };
+  const labels = { roteiros: 'Estúdio Criativo', diagnostico: 'Diagnóstico IA', planejamento: 'Planejamento', calendario: 'Calendário', biblioteca: 'Biblioteca', resultados: 'Seus resultados', campanhas: 'Campanhas UGC', agente: 'Agente pessoal', configuracoes: 'Configurações' };
   document.querySelector('.crumb').innerHTML = `Seu espaço <span>/</span> ${labels[name]}`;
   if (moduleLoaded[name]) return;
   if (name === 'roteiros') loadScripts();
@@ -183,9 +184,104 @@ function showModule(name) {
   if (name === 'planejamento') loadPlans();
   if (name === 'calendario') loadCalendar();
   if (name === 'biblioteca') loadLibrary();
+  if (name === 'resultados') loadResults();
   if (name === 'campanhas') loadCampaigns();
   if (name === 'agente') loadAgent();
   if (name === 'configuracoes') loadSettings();
+}
+
+const resultMetricLabels = {
+  reach: 'Alcance', views: 'Visualizações', interactions: 'Interações',
+  profile_visits: 'Visitas ao perfil', followers: 'Seguidores'
+};
+const resultDays = document.querySelector('#results-days');
+resultDays.addEventListener('change', () => { moduleLoaded.resultados = false; loadResults(); });
+
+function renderResults(snapshots) {
+  const summary = document.querySelector('#results-summary');
+  const history = document.querySelector('#results-history');
+  summary.replaceChildren();
+  history.replaceChildren();
+  if (!snapshots.length) {
+    const empty = document.createElement('div');
+    empty.className = 'script-empty';
+    empty.innerHTML = '<span>⌁</span><b>Seus resultados aparecerão após a primeira sincronização.</b><p>Conecte uma conta profissional do Instagram e autorize a leitura de insights.</p>';
+    summary.append(empty);
+    return;
+  }
+  for (const [metric, label] of Object.entries(resultMetricLabels)) {
+    const latest = snapshots.find((row) => row.metric === metric);
+    const card = document.createElement('article');
+    card.className = 'metric-card';
+    const title = document.createElement('div');
+    title.className = 'metric-label';
+    title.textContent = label;
+    const value = document.createElement('strong');
+    const available = latest?.availability === 'available' && Number.isFinite(latest.value);
+    value.textContent = available
+      ? new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1, notation: latest.value >= 100000 ? 'compact' : 'standard' }).format(latest.value)
+      : '—';
+    const note = document.createElement('p');
+    note.textContent = latest
+      ? `${latest.availability === 'unavailable' ? 'Indisponível na fonte' : `Medição ${latest.period_start} a ${latest.period_end}`} · ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(new Date(latest.fetched_at))}`
+      : 'Sem sincronização neste período.';
+    card.append(title, value, note);
+    summary.append(card);
+  }
+
+  const table = document.createElement('table');
+  table.className = 'results-table';
+  const head = document.createElement('thead');
+  const headerRow = document.createElement('tr');
+  for (const label of ['Métrica', 'Valor', 'Período medido', 'Sincronizado em', 'Fonte']) {
+    const cell = document.createElement('th');
+    cell.scope = 'col';
+    cell.textContent = label;
+    headerRow.append(cell);
+  }
+  head.append(headerRow);
+  const body = document.createElement('tbody');
+  for (const row of snapshots) {
+    const tr = document.createElement('tr');
+    const cells = [
+      resultMetricLabels[row.metric] || row.metric,
+      row.availability === 'available' && Number.isFinite(row.value)
+        ? new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(row.value)
+        : 'Indisponível',
+      `${row.period_start} a ${row.period_end}`,
+      new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(row.fetched_at)),
+      row.source
+    ];
+    for (const text of cells) {
+      const cell = document.createElement('td');
+      cell.textContent = text;
+      tr.append(cell);
+    }
+    body.append(tr);
+  }
+  table.append(head, body);
+  const scroll = document.createElement('div');
+  scroll.className = 'results-table-scroll';
+  scroll.append(table);
+  history.append(scroll);
+}
+
+async function loadResults() {
+  const status = document.querySelector('#results-status');
+  status.textContent = 'Carregando snapshots da sua conta…';
+  try {
+    const result = await fetch(`/api/results?days=${encodeURIComponent(resultDays.value)}`, { credentials: 'same-origin' });
+    if (result.status === 401) { location.href = '/entrar.html?redirect=%2F'; return; }
+    const data = await result.json();
+    if (!result.ok) throw new Error(data.error || 'Não foi possível carregar seus resultados.');
+    renderResults(data.snapshots || []);
+    status.textContent = data.snapshots?.length
+      ? `Histórico dos últimos ${data.days} dias · ${data.snapshots.length} medições armazenadas. As datas de cada linha mostram o período real informado pela fonte.`
+      : 'Ainda não há medições sincronizadas para este período.';
+    moduleLoaded.resultados = true;
+  } catch (error) {
+    status.textContent = error.message || 'Não foi possível carregar seus resultados.';
+  }
 }
 
 function updateQuota(quota) {

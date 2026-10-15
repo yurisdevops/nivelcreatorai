@@ -237,7 +237,7 @@ export default {
         if (result) return response(result, 200, cookies);
       }
 
-      if (url.pathname === "/api/dashboard") {
+      if (url.pathname === "/api/dashboard" || url.pathname === "/api/results") {
         if (!isProviderConfigured(env)) throw new AuthError(503, "Configure Supabase Auth e D1 para acessar seu painel.");
         const { user, cookies } = await requireUser(request, env);
         const workspace = await getWorkspace(env, user.id);
