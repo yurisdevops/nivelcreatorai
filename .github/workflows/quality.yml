@@ -42,3 +42,9 @@ jobs:
 
       - name: Build Worker bundle
         run: npx wrangler deploy --dry-run
+
+      - name: Build the private ClamAV scanner image
+        run: docker build --tag nivel-creator-file-scanner:ci scanner
+
+      - name: Build scanner Worker bundle
+        run: npx wrangler deploy --dry-run --config scanner/wrangler.jsonc
