@@ -9,6 +9,6 @@
     "db:local": "wrangler d1 migrations apply nivel-creator --local"
   },
   "devDependencies": {
-    "wrangler": "^4.0.0"
+    "wrangler": "^4.36.0"
   }
 }

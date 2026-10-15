@@ -26,6 +26,19 @@ const securityHeaders = {
   "permissions-policy": "camera=(), microphone=(), geolocation=()"
 };
 
+const rateLimitedAuthPaths = new Set([
+  "/api/auth/signup", "/api/auth/login", "/api/auth/recover", "/api/auth/password"
+]);
+const rateLimitedAiPaths = new Set([
+  "/api/creative/generate", "/api/plans", "/api/plans/generate", "/api/agent/messages"
+]);
+
+async function enforceRateLimit(binding, key, description) {
+  if (!binding) return;
+  const { success } = await binding.limit({ key });
+  if (!success) throw new AuthError(429, `Muitas solicitações para ${description}. Aguarde um minuto e tente novamente.`);
+}
+
 function response(body, status = 200, cookies = [], extraHeaders = {}) {
   const headers = new Headers({ "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
   for (const [name, value] of Object.entries(securityHeaders)) headers.set(name, value);
@@ -181,6 +194,11 @@ export default {
         return response({ status: "ok", service: "nivel-creator-ai" });
       }
 
+      if (request.method === "POST" && rateLimitedAuthPaths.has(url.pathname)) {
+        const clientIp = request.headers.get("cf-connecting-ip") || "unknown";
+        await enforceRateLimit(env.AUTH_RATE_LIMITER, `${url.pathname}:${clientIp}`, "esta ação de acesso");
+      }
+
       const auth = await authHandler(request, env, url.pathname);
       if (auth) return auth;
 
@@ -260,6 +278,9 @@ export default {
         const { user, cookies } = await requireUser(request, env);
         const workspace = await getWorkspace(env, user.id);
         if (!workspace) throw new AuthError(404, "Seu espaço ainda não foi preparado.");
+        if (request.method === "POST" && rateLimitedAiPaths.has(url.pathname)) {
+          await enforceRateLimit(env.AI_RATE_LIMITER, `${workspace.workspace_id}:${url.pathname}`, "geração de IA neste espaço");
+        }
         const result = await diagnosticsHandler(request, env, url.pathname, workspace);
         if (result) return response(result, 200, cookies);
       }
@@ -271,6 +292,9 @@ export default {
         const { user, cookies } = await requireUser(request, env);
         const workspace = await getWorkspace(env, user.id);
         if (!workspace) throw new AuthError(404, "Seu espaço ainda não foi preparado.");
+        if (request.method === "POST" && rateLimitedAiPaths.has(url.pathname)) {
+          await enforceRateLimit(env.AI_RATE_LIMITER, `${workspace.workspace_id}:${url.pathname}`, "geração de IA neste espaço");
+        }
         let result = await creativeHandler(request, env, url.pathname, workspace);
         if (!result) result = await calendarHandler(request, env, url.pathname, workspace);
         if (!result) result = await planningHandler(request, env, url.pathname, workspace);

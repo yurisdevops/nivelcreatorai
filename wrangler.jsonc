@@ -17,6 +17,18 @@
       "bucket_name": "nivel-creator-private"
     }
   ],
+  "ratelimits": [
+    {
+      "name": "AUTH_RATE_LIMITER",
+      "namespace_id": "2026101501",
+      "simple": { "limit": 30, "period": 60 }
+    },
+    {
+      "name": "AI_RATE_LIMITER",
+      "namespace_id": "2026101502",
+      "simple": { "limit": 8, "period": 60 }
+    }
+  ],
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",

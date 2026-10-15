@@ -13,6 +13,7 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 - Perfil e consentimento versionado para processamento de briefings, métricas autorizadas e contexto pelo Gemini; geração fica bloqueada até o consentimento, que pode ser retirado no perfil.
 - Estúdio Criativo com geração de roteiros via Gemini, briefings limitados e tratados como conteúdo não confiável, saída estruturada validada e roteiros salvos no workspace.
 - Reserva de quota por ciclo antes da chamada de IA (10 roteiros no trial e 60 por ciclo pago); falhas liberam a reserva e roteiros persistidos consomem a quota.
+- Limites de borda para tentativas de acesso (30/minuto por rota e IP) e gerações de IA (8/minuto por workspace e rota); eles complementam as quotas do banco e não servem como contabilidade global exata.
 - Lista de roteiros privada por workspace, com limite de consulta e sem credenciais de IA expostas ao navegador.
 - Diagnóstico com quota (2 no trial, 8 no pago), que exige métricas com fonte e período e não inventa score quando os dados não existem.
 - Conexão de conta profissional pelo Instagram Login da Meta, state OAuth de uso único, consentimento de insights separado do consentimento de IA, token AES-GCM vinculado ao workspace e renovação preventiva.
@@ -59,7 +60,9 @@ Supabase recomenda validar JWTs com `getClaims` ou validar o token no Auth serve
 - E-mail transacional para notificações continua desativado até configurar um provedor e preferências de envio.
 - Varredura antimalware e política operacional de retenção dos objetos R2.
 - Asaas: conectar e validar conta sandbox, reconciliação diária e fluxo de Pix; a implementação atual só oferece recorrência por cartão em sandbox.
-- MFA para administradores, rotina automática de retenção, backups restauráveis, limites globais de tráfego/custo e observabilidade operacional.
+- MFA para administradores, rotina automática de retenção, backups restauráveis, orçamento diário global de IA/circuit breaker e observabilidade operacional. Os rate limits do Worker são distribuídos por localização Cloudflare e permissivos; não substituem orçamento financeiro nem controle global exato.
 - Revisão jurídica, LGPD, segurança e testes descritos na especificação mestre.
 
 Não existe conexão com a conta Asaas ou Nivel Studio, OAuth do Instagram, publicação automática ou provisionamento de infraestrutura remota por este código. As migrações ainda não foram aplicadas.
+
+Os namespaces `2026101501` e `2026101502` dos rate limiters precisam ser exclusivos nesta conta Cloudflare; altere-os se já estiverem em uso por outro Worker. Os limites são contadores rápidos por localização, conforme a API do Cloudflare, e as quotas transacionais no D1 continuam sendo o controle de consumo por ciclo.
