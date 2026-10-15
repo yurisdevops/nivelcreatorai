@@ -17,7 +17,7 @@ function scriptFixture() {
 }
 
 function generationEnvironment() {
-  const state = { statements: [], batches: [] };
+  const state = { statements: [], batches: [], quotaReservations: [] };
   const db = {
     prepare(sql) {
       const statement = {
@@ -42,6 +42,13 @@ function generationEnvironment() {
         },
         async run() {
           state.statements.push({ sql, values: this.values });
+          if (sql.includes("INSERT INTO quota_reservations")) {
+            state.quotaReservations.push({ id: this.values[0], status: "reserved" });
+          }
+          if (sql.includes("UPDATE quota_reservations SET status='released'") && !sql.includes("created_at <")) {
+            const reservation = state.quotaReservations.find((item) => item.id === this.values[0]);
+            if (reservation?.status === "reserved") reservation.status = "released";
+          }
           return { meta: { changes: 1 } };
         }
       };
@@ -96,6 +103,27 @@ test("creator brief stays untrusted data and cannot choose a network destination
     assert.equal(env.state.batches.length, 1);
     const savedScript = env.state.batches[0][0].values[2];
     assert.equal(JSON.parse(savedScript).brief, undefined);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Gemini provider failure releases the script quota reservation", async () => {
+  const env = generationEnvironment();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response("unavailable", { status: 503 });
+
+  try {
+    await assert.rejects(creativeHandler(new Request("https://app.example/api/creative/generate", {
+      method: "POST",
+      headers: { origin: "https://app.example", "content-type": "application/json" },
+      body: JSON.stringify({ brief: "Uma ideia educativa", format: "Reels (vídeo curto)" })
+    }), env, "/api/creative/generate", { workspace_id: "workspace-provider-failure" }),
+    (error) => error.status === 502);
+
+    assert.equal(env.state.quotaReservations.length, 1);
+    assert.equal(env.state.quotaReservations[0].status, "released");
+    assert.equal(env.state.batches.length, 0);
   } finally {
     globalThis.fetch = originalFetch;
   }

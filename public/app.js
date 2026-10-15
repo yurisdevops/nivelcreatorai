@@ -1553,6 +1553,9 @@ async function loadAccount() {
       return;
     }
     document.querySelector('#current-workspace').textContent = 'Prévia do painel';
+    document.querySelector('#onboarding-instagram-status').textContent =
+      'Entre na sua conta para verificar a conexão. Você também pode concluir o perfil sem Instagram.';
+    document.querySelector('#onboarding-connect-instagram').disabled = true;
   } catch {
     // The dashboard remains a non-personalized empty state while offline.
   }
