@@ -1068,6 +1068,16 @@ async function loadSettings() {
     document.querySelector('#settings-goal').value = data.profile.goals[0] || '';
     document.querySelector('#settings-voice').value = data.profile.voice || '';
     document.querySelector('#settings-ai-consent').checked = data.profile.ai_consent;
+    let retentionNote = document.querySelector('#settings-retention');
+    if (!retentionNote) {
+      retentionNote = document.createElement('p');
+      retentionNote.id = 'settings-retention';
+      retentionNote.className = 'privacy-note';
+      document.querySelector('.data-rights-panel').insertBefore(retentionNote, document.querySelector('#export-account-data'));
+    }
+    retentionNote.textContent = data.data_retention.automatic_purge_enabled
+      ? `A remoção automática está ativa: espaços sem acesso vigente são removidos após ${data.data_retention.retention_days} dias, com aviso no app antes da remoção. Exporte seus dados em Configurações.`
+      : `A remoção automática após ${data.data_retention.retention_days} dias está desativada neste ambiente.`;
     const trialEnd = data.trial.ends_at ? new Date(data.trial.ends_at) : null;
     const subscription = data.subscription;
     if (subscription?.status === 'active' || subscription?.status === 'past_due' || (subscription?.status === 'canceled' && Date.parse(subscription.period_end || '') > Date.now())) {
@@ -1115,7 +1125,17 @@ async function loadSettings() {
     const pending = deletionData.deletion_request;
     const deletionStatus = document.querySelector('#deletion-status');
     if (pending) {
-      deletionStatus.textContent = `Solicitação ${pending.status === 'completed' ? 'concluída' : 'em processamento'} desde ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(pending.requested_at))}.`;
+      if (pending.request_type === 'retention') {
+        const scheduled = pending.scheduled_for
+          ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(pending.scheduled_for))
+          : 'data não informada';
+        const retentionState = pending.status === 'rejected' ? 'cancelada porque o acesso foi reativado'
+          : pending.status === 'processing' ? 'em processamento'
+            : data.data_retention.automatic_purge_enabled ? `agendada para ${scheduled}` : 'suspensa neste ambiente';
+        deletionStatus.textContent = `Remoção por retenção ${retentionState}. Exporte seus dados enquanto o workspace estiver disponível.`;
+      } else {
+        deletionStatus.textContent = `Solicitação ${pending.status === 'completed' ? 'concluída' : pending.status === 'rejected' ? 'cancelada' : 'em processamento'} desde ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(pending.requested_at))}.`;
+      }
       document.querySelector('#deletion-form').hidden = pending.status === 'pending' || pending.status === 'processing';
     }
     moduleLoaded.configuracoes = true;

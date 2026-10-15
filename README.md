@@ -24,6 +24,7 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 - Agente pessoal com histórico por workspace e quota (30 mensagens no trial, 200 no pago); conteúdo de conversa não autoriza ações externas.
 - Notificações internas de encerramento do trial, agendadas por Cron com deduplicação; leitura e pausa por workspace.
 - Configurações de perfil e consentimento, exportação JSON do workspace e solicitação de exclusão com remoção do usuário Auth por tarefa agendada.
+- Retenção automática opcional após 30 dias sem acesso vigente, com aviso no app sete dias antes, proteção de assinaturas ativas e tabela operacional para retenções legais; vem desativada até a aprovação e habilitação da política.
 - Checkout recorrente de cartão no Asaas sandbox, confirmação via webhook autenticado, deduplicação, processamento assíncrono, cancelamento e tolerância de 3 dias para inadimplência.
 - Migrações D1 versionadas para dados centrais, calendário, agente, consentimento de IA, planos editoriais, notificações, direitos de dados e cobrança.
 - Cabeçalhos básicos de segurança, CSP sem scripts inline, validação de origem e limite de corpo nas rotas JSON.
@@ -60,9 +61,13 @@ Supabase recomenda validar JWTs com `getClaims` ou validar o token no Auth serve
 - E-mail transacional para notificações continua desativado até configurar um provedor e preferências de envio.
 - Varredura antimalware e política operacional de retenção dos objetos R2.
 - Asaas: conectar e validar conta sandbox, reconciliação diária e fluxo de Pix; a implementação atual só oferece recorrência por cartão em sandbox.
-- MFA para administradores, rotina automática de retenção, backups restauráveis, orçamento diário global de IA/circuit breaker e observabilidade operacional. Os rate limits do Worker são distribuídos por localização Cloudflare e permissivos; não substituem orçamento financeiro nem controle global exato.
+- MFA para administradores, aprovação jurídica da política de retenção, backups restauráveis, orçamento diário global de IA/circuit breaker e observabilidade operacional. Os rate limits do Worker são distribuídos por localização Cloudflare e permissivos; não substituem orçamento financeiro nem controle global exato.
 - Revisão jurídica, LGPD, segurança e testes descritos na especificação mestre.
 
 Não existe conexão com a conta Asaas ou Nivel Studio, OAuth do Instagram, publicação automática ou provisionamento de infraestrutura remota por este código. As migrações ainda não foram aplicadas.
 
 Os namespaces `2026101501` e `2026101502` dos rate limiters precisam ser exclusivos nesta conta Cloudflare; altere-os se já estiverem em uso por outro Worker. Os limites são contadores rápidos por localização, conforme a API do Cloudflare, e as quotas transacionais no D1 continuam sendo o controle de consumo por ciclo.
+
+A migração `0010_workspace_retention.sql` adiciona a fila e os bloqueios de retenção. `DATA_RETENTION_ENABLED` vem como `false`; só altere para `true` após aprovar a política de privacidade e confirmar a cobertura de retenção legal. A rotina exige D1, Supabase Auth administrativo e o bucket R2 configurados. Retenções legais podem ser registradas por operações em `workspace_retention_holds`; não existe endpoint público para criar ou remover esses bloqueios.
+
+Para idempotência, o Asaas mantém o identificador, hash e horário do evento; os payloads operacionais e o conteúdo da fila são apagados 30 dias após o processamento concluído ou falho.

@@ -165,6 +165,8 @@ async function accountHandler(request, env, path) {
       workspace: { name: account.workspace_name },
       profile: { niche: account.niche, goals: JSON.parse(account.goals_json), voice: account.voice,
         completed: Boolean(account.onboarding_completed_at), ai_consent: Boolean(account.ai_data_consent_at) },
+      data_retention: { automatic_purge_enabled: env.DATA_RETENTION_ENABLED === "true" &&
+        Boolean(env.DB && env.FILES && env.SUPABASE_URL && env.SUPABASE_SECRET_KEY), retention_days: 30 },
       trial: { status: account.trial_status, starts_at: account.trial_starts_at, ends_at: account.trial_ends_at },
       subscription: account.subscription_status ? { status: account.subscription_status,
         period_start: account.subscription_period_start, period_end: account.subscription_period_end,

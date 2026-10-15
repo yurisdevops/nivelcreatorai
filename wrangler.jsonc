@@ -3,6 +3,9 @@
   "name": "nivel-creator-ai",
   "main": "src/index.js",
   "compatibility_date": "2026-10-15",
+  "vars": {
+    "DATA_RETENTION_ENABLED": "false"
+  },
   "d1_databases": [
     {
       "binding": "DB",

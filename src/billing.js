@@ -300,6 +300,16 @@ async function processWebhookEvent(env, event) {
 
 export async function processAsaasQueue(env) {
   if (!env.DB) return;
+  await env.DB.batch([
+    env.DB.prepare(`UPDATE payment_events SET payload_json=NULL
+      WHERE payload_json IS NOT NULL AND received_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 days')
+        AND provider_event_id IN (SELECT idempotency_key FROM jobs
+          WHERE kind='asaas_webhook' AND status IN ('completed','failed')
+            AND updated_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 days'))`),
+    env.DB.prepare(`UPDATE jobs SET payload_json='{}'
+      WHERE kind='asaas_webhook' AND status IN ('completed','failed')
+        AND updated_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 days') AND payload_json<>'{}'`)
+  ]);
   const { results } = await env.DB.prepare(`SELECT id, idempotency_key, payload_json, attempts FROM jobs
     WHERE kind='asaas_webhook' AND status='queued' ORDER BY created_at LIMIT 20`).all();
   for (const job of results || []) {
