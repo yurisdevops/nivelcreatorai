@@ -5,7 +5,7 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 ## O que está implementado
 
 - Painel responsivo com tema azul-marinho e violeta baseado nas referências visuais fornecidas.
-- Estados vazios explícitos: o painel não inventa seguidores, alcance, engajamento ou resultados.
+- Painel com quatro métricas vindas dos snapshots mais recentes, estado vazio quando ausentes, origem/período/sincronização e próximas ações derivadas de diagnósticos salvos.
 - Cadastro, login, confirmação de e-mail e logout via Supabase Auth. O Worker guarda os tokens em cookies `HttpOnly`, `Secure` e `SameSite=Lax`; a página não lê esses tokens.
 - Verificação da sessão consultando o endpoint autenticado do Supabase antes de autorizar operações privadas.
 - Recuperação de senha sem revelar se um e-mail tem conta; a troca usa a sessão curta emitida pelo fluxo de recuperação do Supabase.
@@ -15,9 +15,10 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 - Reserva de quota por ciclo antes da chamada de IA (10 roteiros no trial e 60 por ciclo pago); falhas liberam a reserva e roteiros persistidos consomem a quota.
 - Lista de roteiros privada por workspace, com limite de consulta e sem credenciais de IA expostas ao navegador.
 - Diagnóstico com quota (2 no trial, 8 no pago), que exige métricas com fonte e período e não inventa score quando os dados não existem.
+- Planejamento editorial semanal via Gemini, histórico privado, sugestões revisáveis, envio idempotente da pauta ao calendário e quota de 1 plano no trial e 4 por ciclo pago.
 - Calendário privado com fluxo de conteúdo em etapas e campanhas UGC para registrar marcas, entregáveis, prazos e status.
 - Agente pessoal com histórico por workspace e quota (30 mensagens no trial, 200 no pago); conteúdo de conversa não autoriza ações externas.
-- Migrações D1 versionadas para dados centrais, calendário, agente e consentimento de IA.
+- Migrações D1 versionadas para dados centrais, calendário, agente, consentimento de IA, planos editoriais e preferências de notificações.
 - Cabeçalhos básicos de segurança, CSP sem scripts inline, validação de origem e limite de corpo nas rotas JSON.
 
 ## Desenvolvimento local

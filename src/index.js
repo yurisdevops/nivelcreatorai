@@ -9,6 +9,8 @@ import { calendarHandler } from "./calendar.js";
 import { agentHandler } from "./agent.js";
 import { campaignsHandler } from "./campaigns.js";
 import { diagnosticsHandler } from "./diagnostics.js";
+import { planningHandler } from "./planning.js";
+import { dashboardHandler } from "./dashboard.js";
 
 const securityHeaders = {
   "content-security-policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'",
@@ -173,6 +175,15 @@ export default {
       const account = await accountHandler(request, env, url.pathname);
       if (account) return account;
 
+      if (url.pathname === "/api/dashboard") {
+        if (!isProviderConfigured(env)) throw new AuthError(503, "Configure Supabase Auth e D1 para acessar seu painel.");
+        const { user, cookies } = await requireUser(request, env);
+        const workspace = await getWorkspace(env, user.id);
+        if (!workspace) throw new AuthError(404, "Seu espaço ainda não foi preparado.");
+        const result = await dashboardHandler(request, env, url.pathname, workspace);
+        if (result) return response(result, 200, cookies);
+      }
+
       if (url.pathname.startsWith("/api/diagnostics")) {
         if (!isProviderConfigured(env)) throw new AuthError(503, "Configure Supabase Auth e D1 para acessar diagnósticos.");
         const { user, cookies } = await requireUser(request, env);
@@ -183,6 +194,7 @@ export default {
       }
 
       if (url.pathname.startsWith("/api/creative/") || url.pathname.startsWith("/api/calendar/") ||
+          url.pathname.startsWith("/api/plans") ||
           url.pathname.startsWith("/api/agent/") || url.pathname.startsWith("/api/campaigns")) {
         if (!isProviderConfigured(env)) throw new AuthError(503, "Configure Supabase Auth e D1 para usar esta área.");
         const { user, cookies } = await requireUser(request, env);
@@ -190,6 +202,7 @@ export default {
         if (!workspace) throw new AuthError(404, "Seu espaço ainda não foi preparado.");
         let result = await creativeHandler(request, env, url.pathname, workspace);
         if (!result) result = await calendarHandler(request, env, url.pathname, workspace);
+        if (!result) result = await planningHandler(request, env, url.pathname, workspace);
         if (!result) result = await agentHandler(request, env, url.pathname, workspace);
         if (!result) result = await campaignsHandler(request, env, url.pathname, workspace);
         if (result) return response(result, 200, cookies);

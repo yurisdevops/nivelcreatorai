@@ -1,7 +1,7 @@
 import { AuthError, assertSameOrigin, readJson } from "./auth.js";
 
 const STATUSES = ["idea", "draft", "ready_to_record", "recorded", "approved", "published"];
-const FORMATS = ["Reels (vídeo curto)", "Stories", "TikTok", "Shorts", "Carrossel", "Outro"];
+const FORMATS = ["Reels (vídeo curto)", "Stories", "TikTok", "Shorts", "Carrossel", "UGC", "Live", "Outro"];
 
 function cleanEvent(body, partial = false) {
   const title = body.title === undefined && partial ? undefined : typeof body.title === "string" ? body.title.trim() : "";

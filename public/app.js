@@ -5,6 +5,7 @@ const contentWrap = document.querySelector('.content-wrap');
 const moduleViews = {
   roteiros: document.querySelector('#view-roteiros'),
   diagnostico: document.querySelector('#view-diagnostico'),
+  planejamento: document.querySelector('#view-planejamento'),
   calendario: document.querySelector('#view-calendario'),
   campanhas: document.querySelector('#view-campanhas'),
   agente: document.querySelector('#view-agente')
@@ -82,15 +83,16 @@ viewLinks.forEach((link) => link.addEventListener('click', (event) => {
   }
 }));
 
-const moduleLoaded = { roteiros: false, diagnostico: false, calendario: false, campanhas: false, agente: false };
+const moduleLoaded = { roteiros: false, diagnostico: false, planejamento: false, calendario: false, campanhas: false, agente: false };
 function showModule(name) {
   homeSections.forEach((element) => { element.hidden = true; });
   Object.entries(moduleViews).forEach(([key, element]) => { element.hidden = key !== name; });
-  const labels = { roteiros: 'Estúdio Criativo', diagnostico: 'Diagnóstico IA', calendario: 'Calendário', campanhas: 'Campanhas UGC', agente: 'Agente pessoal' };
+  const labels = { roteiros: 'Estúdio Criativo', diagnostico: 'Diagnóstico IA', planejamento: 'Planejamento', calendario: 'Calendário', campanhas: 'Campanhas UGC', agente: 'Agente pessoal' };
   document.querySelector('.crumb').innerHTML = `Seu espaço <span>/</span> ${labels[name]}`;
   if (moduleLoaded[name]) return;
   if (name === 'roteiros') loadScripts();
   if (name === 'diagnostico') loadDiagnostics();
+  if (name === 'planejamento') loadPlans();
   if (name === 'calendario') loadCalendar();
   if (name === 'campanhas') loadCampaigns();
   if (name === 'agente') loadAgent();
@@ -298,6 +300,124 @@ document.querySelector('#creative-form').addEventListener('submit', async (event
 const workflow = ['idea', 'draft', 'ready_to_record', 'recorded', 'approved', 'published'];
 const workflowLabels = { idea: 'Ideia', draft: 'Em roteiro', ready_to_record: 'Pronto para gravar', recorded: 'Gravado', approved: 'Aprovado', published: 'Publicado' };
 
+function updatePlanQuota(quota) {
+  document.querySelector('#plan-quota').textContent = quota.plan === 'expired'
+    ? 'Acesso à geração inativo'
+    : `${Math.max(0, quota.limit - quota.used - quota.reserved)} de ${quota.limit} planos disponíveis`;
+  document.querySelector('#plan-plan').textContent = quota.plan === 'trial' ? 'Limite do período de teste' : quota.plan === 'paid' ? 'Limite do ciclo da assinatura' : 'Planos salvos continuam acessíveis';
+}
+
+function renderPlans(plans) {
+  const list = document.querySelector('#plan-list');
+  list.replaceChildren();
+  if (!plans.length) {
+    const empty = document.createElement('div');
+    empty.className = 'script-empty';
+    empty.innerHTML = '<span>▤</span><b>Seu plano aparece aqui.</b><p>Gere uma semana de ideias e ajuste cada sugestão antes de usar.</p>';
+    list.append(empty);
+    return;
+  }
+  for (const plan of plans) {
+    const card = document.createElement('article');
+    card.className = 'calendar-event editorial-plan';
+    const heading = document.createElement('div');
+    heading.className = 'calendar-event-heading';
+    const title = document.createElement('b');
+    title.textContent = plan.title;
+    const dates = document.createElement('small');
+    dates.textContent = `${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(`${plan.start_date}T12:00:00Z`))} a ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(`${plan.end_date}T12:00:00Z`))}`;
+    heading.append(title, dates);
+    const objective = document.createElement('p');
+    objective.className = 'plan-objective';
+    objective.textContent = `Foco: ${plan.objective}`;
+    const items = document.createElement('div');
+    items.className = 'plan-items';
+    for (const item of plan.items) {
+      const row = document.createElement('section');
+      row.className = 'plan-item';
+      const day = new Date(`${plan.start_date}T12:00:00Z`);
+      day.setUTCDate(day.getUTCDate() + item.day);
+      const dayLabel = document.createElement('small');
+      dayLabel.className = 'script-badge';
+      dayLabel.textContent = new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(day);
+      const topic = document.createElement('b');
+      topic.textContent = `${item.topic} · ${item.format}`;
+      const hook = document.createElement('p');
+      hook.textContent = `Abertura: ${item.hook}`;
+      const cta = document.createElement('p');
+      cta.textContent = `CTA: ${item.call_to_action}`;
+      const why = document.createElement('small');
+      why.textContent = item.rationale;
+      row.append(dayLabel, topic, hook, cta, why);
+      items.append(row);
+    }
+    const addToCalendar = document.createElement('button');
+    addToCalendar.className = 'button button-outline plan-calendar-button';
+    addToCalendar.type = 'button';
+    addToCalendar.textContent = 'Adicionar semana ao calendário →';
+    addToCalendar.addEventListener('click', () => addPlanToCalendar(plan.id, addToCalendar));
+    card.append(heading, objective, items, addToCalendar);
+    list.append(card);
+  }
+}
+
+async function addPlanToCalendar(planId, button) {
+  button.disabled = true;
+  button.textContent = 'Adicionando…';
+  try {
+    const result = await fetch(`/api/plans/${planId}/calendar`, { method: 'POST', credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' }, body: '{}' });
+    const data = await result.json();
+    if (result.status === 401) { location.href = '/entrar.html?redirect=%2F'; return; }
+    if (!result.ok) throw new Error(data.error || 'Não foi possível adicionar o plano ao calendário.');
+    moduleLoaded.calendario = false;
+    announce(data.added ? `${data.added} ideias adicionadas ao calendário.` : 'Este plano já está no calendário.');
+  } catch (error) {
+    announce(error.message || 'Não foi possível adicionar ao calendário.');
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Adicionar semana ao calendário →';
+  }
+}
+
+async function loadPlans() {
+  try {
+    const result = await fetch('/api/plans', { credentials: 'same-origin' });
+    const data = await result.json();
+    if (result.status === 401) { location.href = '/entrar.html?redirect=%2F'; return; }
+    if (!result.ok) throw new Error(data.error || 'Não foi possível carregar os planos.');
+    updatePlanQuota(data.quota);
+    renderPlans(data.plans);
+    moduleLoaded.planejamento = true;
+  } catch (error) { announce(error.message || 'Entre na sua conta para acessar o planejamento.'); }
+}
+
+function localMonday() {
+  const today = new Date();
+  const day = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  day.setDate(day.getDate() - ((day.getDay() + 6) % 7));
+  return `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+}
+
+document.querySelector('#plan-start-date').value = localMonday();
+document.querySelector('#plan-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const button = document.querySelector('#generate-plan');
+  button.disabled = true;
+  button.textContent = 'Montando sua semana…';
+  try {
+    const result = await fetch('/api/plans/generate', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ objective: document.querySelector('#plan-objective').value.trim(), start_date: document.querySelector('#plan-start-date').value }) });
+    const data = await result.json();
+    if (result.status === 401) { location.href = '/entrar.html?redirect=%2F'; return; }
+    if (!result.ok) throw new Error(data.error || 'Não foi possível gerar o plano.');
+    moduleLoaded.planejamento = false;
+    await loadPlans();
+    announce('Plano editorial salvo para você revisar.');
+  } catch (error) { announce(error.message || 'Não foi possível gerar o plano.'); }
+  finally { button.disabled = false; button.innerHTML = '<span>✦</span> Gerar plano editorial <span>→</span>'; }
+});
+
 async function loadCalendar() {
   try {
     const result = await fetch('/api/calendar/events', { credentials: 'same-origin' });
@@ -504,6 +624,87 @@ function renderAgentMessages(messages) {
   area.scrollTop = area.scrollHeight;
 }
 
+function renderHomeDashboard(data) {
+  const labels = { reach: 'Alcance', interactions: 'Interações', profile_visits: 'Visitas ao perfil', followers: 'Seguidores' };
+  for (const [key, label] of Object.entries(labels)) {
+    const row = data.metrics[key];
+    const value = document.querySelector(`#metric-${key}`);
+    const note = document.querySelector(`#metric-${key}-note`);
+    if (row?.availability === 'available' && Number.isFinite(row.value)) {
+      value.textContent = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1, notation: row.value >= 100000 ? 'compact' : 'standard' }).format(row.value);
+      const synced = row.fetched_at ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(row.fetched_at)) : 'sem horário informado';
+      note.textContent = `${row.source} · ${row.period_start} a ${row.period_end} · sync ${synced}`;
+    } else {
+      value.textContent = '—';
+      note.textContent = row?.availability === 'limited' ? 'A API disponibilizou este dado com limitações.'
+        : row?.availability === 'unavailable' ? 'A fonte informou que este dado está indisponível.'
+          : `Sem dados sincronizados para ${label.toLocaleLowerCase('pt-BR')}.`;
+    }
+  }
+
+  const summaryTitle = document.querySelector('#home-summary-title');
+  const summaryCopy = document.querySelector('#home-summary-copy');
+  const actions = document.querySelector('#home-actions');
+  actions.replaceChildren();
+  if (data.diagnostic) {
+    summaryTitle.textContent = 'Resumo da análise mais recente';
+    summaryCopy.textContent = data.diagnostic.summary;
+    for (const item of data.actions) {
+      const li = document.createElement('li');
+      const title = document.createElement('b');
+      title.textContent = item.title;
+      const text = document.createElement('span');
+      text.textContent = item.action;
+      li.append(title, text);
+      actions.append(li);
+    }
+  } else {
+    summaryTitle.textContent = 'Um bom começo';
+    summaryCopy.textContent = 'Quando houver métricas autorizadas e um diagnóstico salvo, o resumo e as próximas ações aparecerão aqui.';
+  }
+
+  const upcoming = document.querySelector('#home-upcoming');
+  upcoming.replaceChildren();
+  if (!data.upcoming.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-calendar';
+    empty.innerHTML = '<div class="calendar-art"><span class="cal-top"></span><span class="cal-date">—</span><span class="cal-lines"></span></div><div><b>Seu calendário está livre</b><p>Guarde uma ideia ou crie seu primeiro roteiro.</p></div>';
+    const create = document.createElement('button');
+    create.className = 'round-plus';
+    create.setAttribute('aria-label', 'Criar roteiro');
+    create.textContent = '＋';
+    create.dataset.view = 'roteiros';
+    create.addEventListener('click', () => showModule('roteiros'));
+    empty.append(create);
+    upcoming.append(empty);
+  } else {
+    for (const event of data.upcoming) {
+      const row = document.createElement('div');
+      row.className = 'upcoming-row';
+      const date = document.createElement('time');
+      date.dateTime = event.scheduled_at;
+      date.textContent = new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(event.scheduled_at));
+      const detail = document.createElement('div');
+      const title = document.createElement('b');
+      title.textContent = event.title;
+      const format = document.createElement('small');
+      format.textContent = `${event.format} · ${workflowLabels[event.status] || event.status}`;
+      detail.append(title, format);
+      row.append(date, detail);
+      upcoming.append(row);
+    }
+  }
+}
+
+async function loadHomeDashboard() {
+  try {
+    const result = await fetch('/api/dashboard', { credentials: 'same-origin' });
+    if (result.status === 401) return;
+    const data = await result.json();
+    if (result.ok) renderHomeDashboard(data);
+  } catch { /* Keep honest empty states if dashboard data is temporarily unavailable. */ }
+}
+
 async function loadAgent() {
   try {
     const result = await fetch('/api/agent/messages', { credentials: 'same-origin' });
@@ -559,6 +760,7 @@ async function loadAccount() {
       } else {
         openOnboarding();
       }
+      await loadHomeDashboard();
       return;
     }
     document.querySelector('#current-workspace').textContent = 'Prévia do painel';
