@@ -20,9 +20,91 @@ function pricing(env) {
 export function serializeAiRequest(payload) {
   const body = JSON.stringify(payload);
   if (new TextEncoder().encode(body).byteLength > MAX_INPUT_BYTES) {
-    throw new AuthError(413, "O contexto enviado à IA excede o limite técnico permitido.");
+    throw new AuthError(413, "O contexto enviado à IA excede o limite técnico permitido.", "ai_payload_too_large");
   }
   return body;
+}
+
+function circuitOpenError() {
+  return new AuthError(503, "A geração por IA está pausada após falhas recentes. Tente novamente em alguns minutos.", "ai_circuit_open");
+}
+
+async function acquireCircuitProbe(env) {
+  let row;
+  try {
+    row = await env.DB.prepare(`SELECT state, open_until, probe_started_at FROM ai_provider_circuits
+      WHERE provider='gemini'`).first();
+  } catch {
+    throw new AuthError(503, "O controle de disponibilidade da IA ainda não foi configurado.", "ai_circuit_unavailable");
+  }
+  if (!row) throw new AuthError(503, "O controle de disponibilidade da IA ainda não foi configurado.", "ai_circuit_unavailable");
+  if (row.state === "closed") return null;
+
+  const token = crypto.randomUUID();
+  let result;
+  try {
+    if (row.state === "open") {
+      result = await env.DB.prepare(`UPDATE ai_provider_circuits SET state='half_open', probe_token=?1,
+          probe_started_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'), updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+        WHERE provider='gemini' AND state='open' AND julianday(open_until)<=julianday('now')`).bind(token).run();
+    } else if (row.state === "half_open") {
+      result = await env.DB.prepare(`UPDATE ai_provider_circuits SET probe_token=?1,
+          probe_started_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'), updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+        WHERE provider='gemini' AND state='half_open' AND julianday(probe_started_at)<julianday('now','-45 seconds')`)
+        .bind(token).run();
+    }
+  } catch {
+    throw new AuthError(503, "O controle de disponibilidade da IA está temporariamente indisponível.", "ai_circuit_unavailable");
+  }
+  if (result?.meta?.changes) return token;
+  throw circuitOpenError();
+}
+
+async function recordCircuitSuccess(env, probeToken) {
+  const query = probeToken
+    ? `UPDATE ai_provider_circuits SET state='closed', consecutive_failures=0, open_until=NULL,
+        probe_token=NULL, probe_started_at=NULL, updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+      WHERE provider='gemini' AND state='half_open' AND probe_token=?1`
+    : `UPDATE ai_provider_circuits SET consecutive_failures=0,
+        updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE provider='gemini' AND state='closed'`;
+  const statement = env.DB.prepare(query);
+  await (probeToken ? statement.bind(probeToken) : statement).run();
+}
+
+async function recordCircuitFailure(env, probeToken) {
+  const query = probeToken
+    ? `UPDATE ai_provider_circuits SET state='open', consecutive_failures=5,
+        open_until=strftime('%Y-%m-%dT%H:%M:%fZ','now','+5 minutes'), probe_token=NULL, probe_started_at=NULL,
+        updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+      WHERE provider='gemini' AND state='half_open' AND probe_token=?1`
+    : `UPDATE ai_provider_circuits SET consecutive_failures=consecutive_failures+1,
+        state=CASE WHEN consecutive_failures+1>=5 THEN 'open' ELSE 'closed' END,
+        open_until=CASE WHEN consecutive_failures+1>=5 THEN strftime('%Y-%m-%dT%H:%M:%fZ','now','+5 minutes') ELSE NULL END,
+        probe_token=NULL, probe_started_at=NULL, updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+      WHERE provider='gemini' AND state='closed'`;
+  const statement = env.DB.prepare(query);
+  await (probeToken ? statement.bind(probeToken) : statement).run();
+}
+
+export async function requestGemini(env, model, payload, unavailableMessage) {
+  const body = serializeAiRequest(payload);
+  const probeToken = await acquireCircuitProbe(env);
+  let response;
+  try {
+    response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
+      body, signal: AbortSignal.timeout(25000)
+    });
+  } catch {
+    await recordCircuitFailure(env, probeToken);
+    throw new AuthError(502, unavailableMessage);
+  }
+  if (!response.ok) {
+    await recordCircuitFailure(env, probeToken);
+    throw new AuthError(502, unavailableMessage);
+  }
+  await recordCircuitSuccess(env, probeToken);
+  return response;
 }
 
 export function usageFromGemini(payload) {
@@ -73,16 +155,22 @@ export async function settleAiBudget(env, reservationId, usage) {
       input_usd_per_million, output_usd_per_million, status
     FROM ai_budget_reservations WHERE id=?1`).bind(reservationId).first();
   if (!reservation || reservation.status !== "reserved") throw new AuthError(503, "A reserva global de IA expirou ou já foi concluída.");
-  const outputTokens = usage?.promptTokens !== null && usage?.totalTokens !== null
-    ? usage.totalTokens - usage.promptTokens : null;
-  const usableCounts = usage?.promptTokens !== null && usage?.totalTokens !== null &&
-    usage.promptTokens <= reservation.max_input_tokens && outputTokens >= 0 && outputTokens <= reservation.max_output_tokens;
+  const promptTokens = Number.isSafeInteger(usage?.promptTokens) && usage.promptTokens >= 0 ? usage.promptTokens : null;
+  const totalTokens = Number.isSafeInteger(usage?.totalTokens) && usage.totalTokens >= 0 ? usage.totalTokens : null;
+  const outputTokens = promptTokens !== null && totalTokens !== null ? totalTokens - promptTokens : null;
+  const usableCounts = promptTokens !== null && totalTokens !== null && promptTokens <= reservation.max_input_tokens &&
+    outputTokens >= 0 && outputTokens <= reservation.max_output_tokens;
   const actualMicroUsd = usableCounts
-    ? Math.ceil(usage.promptTokens * reservation.input_usd_per_million + outputTokens * reservation.output_usd_per_million)
+    ? Math.ceil(promptTokens * reservation.input_usd_per_million + outputTokens * reservation.output_usd_per_million)
     : reservation.reserved_micro_usd;
   const result = await env.DB.prepare(`UPDATE ai_budget_reservations SET status='completed', actual_micro_usd=?2,
       completed_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?1 AND status='reserved'`)
     .bind(reservationId, actualMicroUsd).run();
   if (!result.meta?.changes) throw new AuthError(503, "Não foi possível concluir o registro do consumo global de IA.");
   return actualMicroUsd / 1_000_000;
+}
+
+export async function releaseAiBudgetReservation(env, reservationId) {
+  await env.DB.prepare(`UPDATE ai_budget_reservations SET status='released'
+    WHERE id=?1 AND status='reserved'`).bind(reservationId).run();
 }
