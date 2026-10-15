@@ -34,7 +34,7 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 
 ## Desenvolvimento local
 
-1. Instale Node.js e, nesta pasta, rode `npm install`.
+1. Instale Node.js 22 ou superior e, nesta pasta, rode `npm install`.
 2. Crie um projeto Supabase exclusivo para o Nivel Creator AI. Ative confirmação de e-mail e adicione `http://localhost:8787/auth/callback` às URLs de redirecionamento permitidas. Em Authentication → MFA, habilite TOTP e permita verificação de fatores; creators podem ativar em Configurações → Segurança da conta. Um usuário cujo papel em `memberships` seja `admin` será encaminhado para cadastrar TOTP no próximo login.
 3. Copie `.dev.vars.example` para `.dev.vars` e preencha `SUPABASE_URL`, `SUPABASE_ANON_KEY` e `GEMINI_API_KEY` com credenciais próprias. Nunca coloque credenciais de serviço no navegador nem versionadas no Git.
 4. Crie uma base D1 exclusiva: `npx wrangler d1 create nivel-creator`. Substitua `replace-with-your-d1-database-id` em `wrangler.jsonc` pelo `database_id` retornado.
