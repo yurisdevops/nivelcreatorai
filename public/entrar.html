@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#070d20">
+    <meta name="description" content="Acesse seu espaço no Nivel Creator AI.">
+    <title>Entrar · Nivel Creator AI</title>
+    <link rel="stylesheet" href="/auth.css">
+    <script src="/auth.js" defer></script>
+  </head>
+  <body>
+    <main class="auth-shell">
+      <a class="auth-brand" href="/"><span class="brand-glyph">✦</span><span>nivel <b>Creator AI</b></span></a>
+      <section class="auth-card" aria-labelledby="auth-title">
+        <p class="eyebrow">SEU ESPAÇO DE CRIAÇÃO</p>
+        <h1 id="auth-title">Entre no seu ritmo.</h1>
+        <p class="auth-intro">Acesse suas ideias, roteiros e planejamento em um só lugar.</p>
+        <div class="auth-tabs" role="tablist" aria-label="Tipo de acesso">
+          <button class="auth-tab active" id="login-tab" type="button" role="tab" aria-selected="true">Entrar</button>
+          <button class="auth-tab" id="signup-tab" type="button" role="tab" aria-selected="false">Criar conta</button>
+        </div>
+        <form id="auth-form" novalidate>
+          <label for="email">E-mail</label>
+          <input id="email" name="email" type="email" autocomplete="email" maxlength="254" required placeholder="voce@email.com">
+          <label for="password">Senha</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" required placeholder="Pelo menos 8 caracteres">
+          <p class="form-message" id="form-message" role="status" aria-live="polite"></p>
+          <button class="submit-button" id="submit-button" type="submit">Entrar <span>→</span></button>
+        </form>
+        <div class="setup-message" id="setup-message" hidden>
+          <b>O acesso está sendo preparado.</b>
+          <p>O produto ainda precisa conectar seu provedor de autenticação e o banco de dados antes de aceitar contas.</p>
+        </div>
+        <p class="privacy-note">Sua sessão é protegida e não fica exposta ao JavaScript da página.</p>
+      </section>
+      <p class="auth-footer">Nivel Creator AI <span>·</span> Estratégia, criação e organização para creators.</p>
+    </main>
+  </body>
+</html>
