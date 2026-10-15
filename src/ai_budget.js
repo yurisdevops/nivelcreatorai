@@ -5,10 +5,19 @@ const MAX_INPUT_TOKENS = 64000;
 const MAX_INPUT_BYTES = 64000;
 const MAX_DAILY_BUDGET_USD = 100000;
 
-function pricing(env) {
+function pricing(env, tier = "complex") {
   const dailyUsd = Number(env.AI_DAILY_BUDGET_USD);
-  const inputUsdPerMillion = Number(env.GEMINI_INPUT_USD_PER_MILLION);
-  const outputUsdPerMillion = Number(env.GEMINI_OUTPUT_USD_PER_MILLION);
+  const simple = tier === "simple";
+  const customSimpleModel = simple && env.GEMINI_SIMPLE_MODEL && env.GEMINI_SIMPLE_MODEL !== "gemini-3.5-flash-lite";
+  if (customSimpleModel && (env.GEMINI_SIMPLE_INPUT_USD_PER_MILLION === undefined || env.GEMINI_SIMPLE_OUTPUT_USD_PER_MILLION === undefined)) {
+    throw new AuthError(503, "Configure as tarifas de entrada e saída do modelo simples junto com a troca do modelo.");
+  }
+  const inputUsdPerMillion = Number(simple
+    ? (env.GEMINI_SIMPLE_INPUT_USD_PER_MILLION ?? 0.30)
+    : env.GEMINI_INPUT_USD_PER_MILLION);
+  const outputUsdPerMillion = Number(simple
+    ? (env.GEMINI_SIMPLE_OUTPUT_USD_PER_MILLION ?? 2.50)
+    : env.GEMINI_OUTPUT_USD_PER_MILLION);
   if (!Number.isFinite(dailyUsd) || dailyUsd < 0 || dailyUsd > MAX_DAILY_BUDGET_USD ||
       !Number.isFinite(inputUsdPerMillion) || inputUsdPerMillion <= 0 ||
       !Number.isFinite(outputUsdPerMillion) || outputUsdPerMillion <= 0) {
@@ -117,12 +126,12 @@ export function usageFromGemini(payload) {
   };
 }
 
-export async function reserveAiBudget(env, reservationId, maxOutputTokens) {
+export async function reserveAiBudget(env, reservationId, maxOutputTokens, tier = "complex") {
   if (!env.DB) throw new AuthError(503, "O banco de dados ainda não foi configurado.");
   if (!Number.isInteger(maxOutputTokens) || maxOutputTokens < 1 || maxOutputTokens > 8192) {
     throw new AuthError(500, "O limite de geração da IA está inválido.");
   }
-  const { budgetMicroUsd, inputUsdPerMillion, outputUsdPerMillion } = pricing(env);
+  const { budgetMicroUsd, inputUsdPerMillion, outputUsdPerMillion } = pricing(env, tier);
   const reservedMicroUsd = Math.ceil(MAX_INPUT_TOKENS * inputUsdPerMillion + maxOutputTokens * outputUsdPerMillion);
   if (budgetMicroUsd < reservedMicroUsd) {
     throw new AuthError(429, "O limite diário global de IA já foi atingido. Tente novamente após a renovação diária.");
@@ -139,10 +148,10 @@ export async function reserveAiBudget(env, reservationId, maxOutputTokens) {
   if (!result.meta?.changes) throw new AuthError(429, "O limite diário global de IA foi atingido. Tente novamente após a renovação diária.");
 }
 
-export async function reserveAiQuota(env, workspaceId, entitlement, operation, limit, maxOutputTokens) {
+export async function reserveAiQuota(env, workspaceId, entitlement, operation, limit, maxOutputTokens, tier = "complex") {
   const reservationId = await reserveQuota(env, workspaceId, entitlement, operation, limit);
   try {
-    await reserveAiBudget(env, reservationId, maxOutputTokens);
+    await reserveAiBudget(env, reservationId, maxOutputTokens, tier);
     return reservationId;
   } catch (error) {
     await releaseQuotaReservation(env, reservationId).catch(() => {});

@@ -6,12 +6,19 @@ SUPABASE_SECRET_KEY=
 GEMINI_API_KEY=COLOQUE_SUA_CHAVE_LOCAL
 # Generate one random 32-byte secret and set it in both Workers.
 FILE_SCANNER_SECRET=
-# Opcional; padrão atual do projeto: gemini-3.8-flash
+# Roteador: tarefas simples usam Flash-Lite; roteiros/diagnósticos/planos usam o modelo complexo.
+# GEMINI_MODEL permanece como fallback legado do modelo complexo.
 GEMINI_MODEL=gemini-3.8-flash
-# Teto global diário e preço máximo por 1 milhão de tokens (USD).
-AI_DAILY_BUDGET_USD=10
+# GEMINI_COMPLEX_MODEL=gemini-3.8-flash
+# Troque modelo e tarifas juntos; confirme os preços atuais no painel do Gemini antes de produção.
+GEMINI_SIMPLE_MODEL=gemini-3.5-flash-lite
+GEMINI_SIMPLE_INPUT_USD_PER_MILLION=0.30
+GEMINI_SIMPLE_OUTPUT_USD_PER_MILLION=2.50
+# Tarifas conservadoras do modelo complexo (referência padrão do projeto).
 GEMINI_INPUT_USD_PER_MILLION=1.5
 GEMINI_OUTPUT_USD_PER_MILLION=7.5
+# Teto global diário e preço máximo por 1 milhão de tokens (USD).
+AI_DAILY_BUDGET_USD=10
 # Optional Asaas Sandbox credentials; never use a production key with this implementation.
 ASAAS_API_KEY=
 ASAAS_WEBHOOK_TOKEN=
