@@ -7,6 +7,7 @@ const moduleViews = {
   diagnostico: document.querySelector('#view-diagnostico'),
   planejamento: document.querySelector('#view-planejamento'),
   calendario: document.querySelector('#view-calendario'),
+  biblioteca: document.querySelector('#view-biblioteca'),
   campanhas: document.querySelector('#view-campanhas'),
   agente: document.querySelector('#view-agente'),
   configuracoes: document.querySelector('#view-configuracoes')
@@ -170,17 +171,18 @@ viewLinks.forEach((link) => link.addEventListener('click', (event) => {
   }
 }));
 
-const moduleLoaded = { roteiros: false, diagnostico: false, planejamento: false, calendario: false, campanhas: false, agente: false, configuracoes: false };
+const moduleLoaded = { roteiros: false, diagnostico: false, planejamento: false, calendario: false, biblioteca: false, campanhas: false, agente: false, configuracoes: false };
 function showModule(name) {
   homeSections.forEach((element) => { element.hidden = true; });
   Object.entries(moduleViews).forEach(([key, element]) => { element.hidden = key !== name; });
-  const labels = { roteiros: 'Estúdio Criativo', diagnostico: 'Diagnóstico IA', planejamento: 'Planejamento', calendario: 'Calendário', campanhas: 'Campanhas UGC', agente: 'Agente pessoal', configuracoes: 'Configurações' };
+  const labels = { roteiros: 'Estúdio Criativo', diagnostico: 'Diagnóstico IA', planejamento: 'Planejamento', calendario: 'Calendário', biblioteca: 'Biblioteca', campanhas: 'Campanhas UGC', agente: 'Agente pessoal', configuracoes: 'Configurações' };
   document.querySelector('.crumb').innerHTML = `Seu espaço <span>/</span> ${labels[name]}`;
   if (moduleLoaded[name]) return;
   if (name === 'roteiros') loadScripts();
   if (name === 'diagnostico') loadDiagnostics();
   if (name === 'planejamento') loadPlans();
   if (name === 'calendario') loadCalendar();
+  if (name === 'biblioteca') loadLibrary();
   if (name === 'campanhas') loadCampaigns();
   if (name === 'agente') loadAgent();
   if (name === 'configuracoes') loadSettings();
@@ -505,6 +507,101 @@ document.querySelector('#plan-form').addEventListener('submit', async (event) =>
   } catch (error) { announce(error.message || 'Não foi possível gerar o plano.'); }
   finally { button.disabled = false; button.innerHTML = '<span>✦</span> Gerar plano editorial <span>→</span>'; }
 });
+
+function readableSize(bytes) {
+  if (bytes < 1024 * 1024) return `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(bytes / 1024)} KB`;
+  return `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(bytes / (1024 * 1024))} MB`;
+}
+
+function renderLibraryFiles(files) {
+  const list = document.querySelector('#library-file-list');
+  list.replaceChildren();
+  if (!files.length) {
+    const empty = document.createElement('div');
+    empty.className = 'script-empty';
+    const icon = document.createElement('span'); icon.textContent = '▱';
+    const title = document.createElement('b'); title.textContent = 'Sua biblioteca está vazia.';
+    const copy = document.createElement('p'); copy.textContent = 'Os arquivos que você salvar aparecerão aqui.';
+    empty.append(icon, title, copy); list.append(empty); return;
+  }
+  for (const file of files) {
+    const row = document.createElement('article');
+    row.className = 'library-file-row';
+    const icon = document.createElement('span');
+    icon.className = 'library-file-icon';
+    icon.textContent = file.content_type.startsWith('image/') ? '▧' : file.content_type.startsWith('video/') ? '▷' : '▤';
+    const info = document.createElement('div');
+    info.className = 'library-file-info';
+    const link = document.createElement('a');
+    link.href = `/api/files/${encodeURIComponent(file.id)}/content`;
+    link.textContent = file.display_name;
+    const detail = document.createElement('small');
+    detail.textContent = `${file.content_type} · ${readableSize(file.byte_size)} · ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(file.created_at))}`;
+    info.append(link, detail);
+    const remove = document.createElement('button');
+    remove.className = 'button button-outline';
+    remove.type = 'button';
+    remove.textContent = 'Excluir';
+    remove.addEventListener('click', () => deleteLibraryFile(file));
+    row.append(icon, info, remove);
+    list.append(row);
+  }
+}
+
+async function loadLibrary() {
+  try {
+    const result = await fetch('/api/files', { credentials: 'same-origin' });
+    if (result.status === 401) { location.href = '/entrar.html?redirect=%2F'; return; }
+    const data = await result.json();
+    if (!result.ok) throw new Error(data.error || 'Não foi possível carregar a biblioteca.');
+    const storage = data.storage;
+    const used = readableSize(storage.used + storage.reserved);
+    const limit = storage.limit ? readableSize(storage.limit) : 'sem espaço ativo';
+    document.querySelector('#library-storage-used').textContent = `${readableSize(storage.used)} utilizados`;
+    document.querySelector('#library-storage-limit').textContent = `${limit} · até 25 MB por arquivo`;
+    document.querySelector('#library-upload-button').disabled = !storage.configured || storage.limit <= storage.used + storage.reserved;
+    document.querySelector('#library-status').textContent = !storage.configured
+      ? 'Crie o bucket R2 privado para habilitar uploads.'
+      : storage.limit ? `${used} ocupados de ${limit}.` : 'O trial terminou. Seus arquivos seguem disponíveis para baixar ou excluir.';
+    renderLibraryFiles(data.files || []);
+    moduleLoaded.biblioteca = true;
+  } catch (error) { announce(error.message || 'Não foi possível carregar a biblioteca.'); }
+}
+
+document.querySelector('#library-upload-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const picker = document.querySelector('#library-file');
+  const file = picker.files?.[0];
+  const button = document.querySelector('#library-upload-button');
+  if (!file) { announce('Escolha um arquivo para salvar.'); return; }
+  if (file.size > 25 * 1024 * 1024) { announce('Cada arquivo pode ter no máximo 25 MB.'); return; }
+  button.disabled = true;
+  document.querySelector('#library-status').textContent = 'Enviando e verificando o arquivo…';
+  try {
+    const result = await fetch('/api/files', { method: 'POST', credentials: 'same-origin',
+      headers: { 'content-type': 'application/octet-stream', 'x-file-name': encodeURIComponent(file.name) }, body: file });
+    const data = await result.json();
+    if (result.status === 401) { location.href = '/entrar.html?redirect=%2F'; return; }
+    if (!result.ok) throw new Error(data.error || 'Não foi possível salvar o arquivo.');
+    picker.value = '';
+    document.querySelector('#library-status').textContent = 'Arquivo salvo no seu espaço privado.';
+    await loadLibrary();
+  } catch (error) { document.querySelector('#library-status').textContent = error.message || 'Não foi possível salvar o arquivo.'; }
+  finally { button.disabled = false; }
+});
+
+async function deleteLibraryFile(file) {
+  if (!window.confirm(`Excluir “${file.display_name}” da sua biblioteca?`)) return;
+  try {
+    const result = await fetch(`/api/files/${encodeURIComponent(file.id)}`, { method: 'DELETE', credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify({ confirm: true }) });
+    const data = await result.json();
+    if (result.status === 401) { location.href = '/entrar.html?redirect=%2F'; return; }
+    if (!result.ok) throw new Error(data.error || 'Não foi possível excluir o arquivo.');
+    await loadLibrary();
+    announce('Arquivo excluído da biblioteca.');
+  } catch (error) { announce(error.message || 'Não foi possível excluir o arquivo.'); }
+}
 
 async function loadCalendar() {
   try {

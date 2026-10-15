@@ -127,12 +127,14 @@ export function accessTokenFromRequest(request) {
   return parseCookies(request)[ACCESS_COOKIE] || null;
 }
 
-export function assertSameOrigin(request) {
+export function assertSameOrigin(request, contentType = "application/json") {
   const origin = request.headers.get("origin");
   if (!origin || origin !== new URL(request.url).origin) throw new AuthError(403, "Origem da solicitação inválida.");
   const fetchSite = request.headers.get("sec-fetch-site");
   if (fetchSite && fetchSite !== "same-origin" && fetchSite !== "none") throw new AuthError(403, "Origem da solicitação inválida.");
-  if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) throw new AuthError(415, "Envie os dados em formato JSON.");
+  if (!request.headers.get("content-type")?.toLowerCase().startsWith(contentType)) {
+    throw new AuthError(415, contentType === "application/json" ? "Envie os dados em formato JSON." : "O tipo do arquivo enviado não é compatível.");
+  }
 }
 
 export async function readJson(request, maxBytes = 8192) {

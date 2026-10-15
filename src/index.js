@@ -15,6 +15,7 @@ import { notificationCronHandler, notificationHandler } from "./notifications.js
 import { accountDataHandler, processDeletionQueue } from "./account_data.js";
 import { billingHandler, processAsaasQueue, receiveAsaasWebhook } from "./billing.js";
 import { instagramCallback, instagramHandler, refreshInstagramTokens, syncInstagramInsights } from "./instagram.js";
+import { filesHandler } from "./files.js";
 
 const securityHeaders = {
   "content-security-policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'",
@@ -218,6 +219,21 @@ export default {
         const workspace = await getWorkspace(env, user.id);
         if (!workspace) throw new AuthError(404, "Seu espaço não foi encontrado.");
         const result = await instagramHandler(request, env, url.pathname, workspace);
+        if (result) return response(result, 200, cookies);
+      }
+
+      if (url.pathname.startsWith("/api/files")) {
+        if (!isProviderConfigured(env)) throw new AuthError(503, "Configure Supabase Auth e D1 para acessar sua biblioteca.");
+        const { user, cookies } = await requireUser(request, env);
+        const workspace = await getWorkspace(env, user.id);
+        if (!workspace) throw new AuthError(404, "Seu espaço não foi encontrado.");
+        const result = await filesHandler(request, env, url.pathname, workspace);
+        if (result instanceof Response) {
+          const headers = new Headers(result.headers);
+          for (const [name, value] of Object.entries(securityHeaders)) headers.set(name, value);
+          for (const cookie of cookies) headers.append("set-cookie", cookie);
+          return new Response(result.body, { status: result.status, statusText: result.statusText, headers });
+        }
         if (result) return response(result, 200, cookies);
       }
 

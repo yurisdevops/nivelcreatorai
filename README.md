@@ -17,6 +17,7 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 - Diagnóstico com quota (2 no trial, 8 no pago), que exige métricas com fonte e período e não inventa score quando os dados não existem.
 - Conexão de conta profissional pelo Instagram Login da Meta, state OAuth de uso único, consentimento de insights separado do consentimento de IA, token AES-GCM vinculado ao workspace e renovação preventiva.
 - Captura diária de alcance, visualizações, interações, visitas ao perfil e seguidores pela API oficial; métricas não retornadas para uma conta ou permissão ficam marcadas como indisponíveis.
+- Biblioteca privada em R2, com verificação de assinatura dos arquivos, limite de 25 MB por upload, quota atômica de 250 MB no trial e 2 GB no plano pago, downloads autenticados e exclusão com trilha de auditoria.
 - Planejamento editorial semanal via Gemini, histórico privado, sugestões revisáveis, envio idempotente da pauta ao calendário e quota de 1 plano no trial e 4 por ciclo pago.
 - Calendário privado com fluxo de conteúdo em etapas e campanhas UGC para registrar marcas, entregáveis, prazos e status.
 - Agente pessoal com histórico por workspace e quota (30 mensagens no trial, 200 no pago); conteúdo de conversa não autoriza ações externas.
@@ -34,6 +35,8 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 4. Crie uma base D1 exclusiva: `npx wrangler d1 create nivel-creator`. Substitua `replace-with-your-d1-database-id` em `wrangler.jsonc` pelo `database_id` retornado.
 5. Aplique o esquema local: `npm run db:local`.
 6. Rode `npm run dev` e abra `http://localhost:8787`.
+
+Crie também o bucket privado usado pela Biblioteca com `npx wrangler r2 bucket create nivel-creator-private`. A configuração não publica o bucket; uploads, downloads e exclusões passam pelo Worker autenticado. Os tipos são validados pela assinatura do conteúdo, não pelo nome ou cabeçalho enviado pelo navegador.
 
 Para produção, configure a URL de callback do domínio final no Supabase, defina `SUPABASE_URL` e `SUPABASE_ANON_KEY` como secrets do Worker e aplique as migrações remotas conscientemente com `npx wrangler d1 migrations apply nivel-creator --remote`.
 
@@ -54,7 +57,7 @@ Supabase recomenda validar JWTs com `getClaims` ou validar o token no Auth serve
 - Revisar e aprovar o app Meta, validar a conexão e a compatibilidade das métricas na conta sandbox/desenvolvedor; a implementação depende dessas permissões e não publica conteúdo.
 - Aprovisionar e configurar os recursos reais de Supabase, D1 e Gemini para o ambiente de beta.
 - E-mail transacional para notificações continua desativado até configurar um provedor e preferências de envio.
-- Arquivos privados via R2 com limites, verificação de conteúdo e URLs curtas.
+- Varredura antimalware e política operacional de retenção dos objetos R2.
 - Asaas: conectar e validar conta sandbox, reconciliação diária e fluxo de Pix; a implementação atual só oferece recorrência por cartão em sandbox.
 - MFA para administradores, rotina automática de retenção, backups restauráveis, limites globais de tráfego/custo e observabilidade operacional.
 - Revisão jurídica, LGPD, segurança e testes descritos na especificação mestre.

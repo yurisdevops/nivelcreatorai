@@ -26,7 +26,7 @@ async function exportWorkspace(env, account) {
       WHERE workspace_id=?1 ORDER BY created_at DESC LIMIT 1000`).bind(id).all(),
     db.prepare(`SELECT id, brand_name, brief_json, status, due_at, created_at, updated_at FROM campaigns
       WHERE workspace_id=?1 ORDER BY created_at DESC LIMIT 2000`).bind(id).all(),
-    db.prepare(`SELECT id, content_type, byte_size, created_at, expires_at FROM files
+    db.prepare(`SELECT id, display_name, content_type, byte_size, sha256, created_at, expires_at FROM files
       WHERE workspace_id=?1 ORDER BY created_at DESC LIMIT 2000`).bind(id).all(),
     db.prepare(`SELECT id, script_id, title, format, scheduled_at, status, notes, created_at, updated_at FROM calendar_events
       WHERE workspace_id=?1 ORDER BY created_at DESC LIMIT 2000`).bind(id).all(),
@@ -55,7 +55,7 @@ async function exportWorkspace(env, account) {
     editorial_plans: (plans.results || []).map((row) => ({ ...row, items: safeJson(row.items_json, []) })),
     agent_messages: conversations.results || [],
     notifications: (notifications.results || []).map((row) => ({ ...row, content: safeJson(row.content_json, {}) })),
-    limits: { note: "Exportação limitada aos primeiros 5.000 itens por coleção. Arquivos R2 não estão habilitados neste ambiente; a lista contém metadados quando aplicável." }
+    limits: { note: "A exportação tem limites por coleção; a Biblioteca inclui até 2.000 itens por arquivo de dados. Os objetos R2 são exportados como metadados; baixe cada conteúdo na própria Biblioteca." }
   };
 }
 
@@ -97,6 +97,13 @@ async function deleteAuthUser(env, userId) {
   throw new Error(`auth_${result.status}`);
 }
 
+async function deleteWorkspaceFiles(env, workspaceId) {
+  const { results } = await env.DB.prepare("SELECT r2_key FROM files WHERE workspace_id=?1").bind(workspaceId).all();
+  if (!results?.length) return;
+  if (!env.FILES) throw new Error("storage_config");
+  for (const file of results) await env.FILES.delete(file.r2_key);
+}
+
 export async function processDeletionQueue(env) {
   if (!env.DB || !env.SUPABASE_URL || !env.SUPABASE_SECRET_KEY) return;
   const { results } = await env.DB.prepare(`SELECT d.id, d.workspace_id, u.id AS user_id
@@ -106,6 +113,7 @@ export async function processDeletionQueue(env) {
     ORDER BY d.requested_at LIMIT 5`).all();
   for (const request of results || []) {
     try {
+      await deleteWorkspaceFiles(env, request.workspace_id);
       await deleteAuthUser(env, request.user_id);
       await env.DB.batch([
         env.DB.prepare("DELETE FROM workspaces WHERE id=?1").bind(request.workspace_id),

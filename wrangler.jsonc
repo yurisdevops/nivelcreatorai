@@ -11,6 +11,12 @@
       "migrations_dir": "migrations"
     }
   ],
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "nivel-creator-private"
+    }
+  ],
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
