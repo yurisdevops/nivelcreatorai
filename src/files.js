@@ -34,6 +34,34 @@ async function hashFile(bytes) {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+async function scanForMalware(env, bytes) {
+  if (!env.FILE_SCANNER || typeof env.FILE_SCANNER.fetch !== "function"
+      || typeof env.FILE_SCANNER_SECRET !== "string" || env.FILE_SCANNER_SECRET.length < 32) {
+    throw new AuthError(503, "A varredura de segurança dos arquivos não está configurada.");
+  }
+  let response;
+  try {
+    response = await env.FILE_SCANNER.fetch(new Request("https://file-scanner.internal/scan", {
+      method: "POST",
+      headers: {
+        "content-type": "application/octet-stream",
+        "content-length": String(bytes.byteLength),
+        "x-file-scanner-secret": env.FILE_SCANNER_SECRET
+      },
+      body: bytes
+    }));
+  } catch {
+    throw new AuthError(503, "A varredura de segurança está indisponível. Tente novamente.");
+  }
+  if (response.status === 422) throw new AuthError(415, "O arquivo foi bloqueado pela verificação de segurança.");
+  if (!response.ok) throw new AuthError(503, "A varredura de segurança está indisponível. Tente novamente.");
+  let result;
+  try { result = await response.json(); } catch {
+    throw new AuthError(503, "A resposta da verificação de segurança não é válida.");
+  }
+  if (result.clean !== true) throw new AuthError(503, "A verificação de segurança não confirmou o arquivo.");
+}
+
 async function readBoundedBody(request, maxBytes) {
   const reader = request.body?.getReader();
   if (!reader) throw new AuthError(400, "O conteúdo do arquivo não foi recebido.");
@@ -83,6 +111,7 @@ async function uploadFile(request, env, account) {
   }
   const contentType = detectedMime(bytes);
   if (!contentType) throw new AuthError(415, "Use imagem, vídeo ou PDF com conteúdo reconhecido.");
+  await scanForMalware(env, bytes);
   const access = await resolveEntitlement(env, account.workspace_id);
   const limit = storageLimit(access.plan);
   await env.DB.prepare(`UPDATE file_upload_reservations SET status='released'

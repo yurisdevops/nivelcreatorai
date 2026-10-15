@@ -4,6 +4,8 @@ SUPABASE_ANON_KEY=sb_publishable_xxxxxxxxxxxxxxxxxxxxxxxxx
 # Optional, only for self-service account deletion. Keep this server-side; never use it in public/ files.
 SUPABASE_SECRET_KEY=
 GEMINI_API_KEY=COLOQUE_SUA_CHAVE_LOCAL
+# Generate one random 32-byte secret and set it in both Workers.
+FILE_SCANNER_SECRET=
 # Opcional; padrão atual do projeto: gemini-3.8-flash
 GEMINI_MODEL=gemini-3.8-flash
 # Teto global diário e preço máximo por 1 milhão de tokens (USD).

@@ -39,7 +39,14 @@ function uploadEnvironment() {
     async delete(key) { state.objects = state.objects.filter((object) => object.key !== key); },
     async get(key) { return state.objects.find((object) => object.key === key) || null; }
   };
-  return { DB: db, FILES, state };
+  const scannerCalls = [];
+  const FILE_SCANNER = {
+    async fetch(request) {
+      scannerCalls.push(request);
+      return Response.json({ clean: true });
+    }
+  };
+  return { DB: db, FILES, FILE_SCANNER, FILE_SCANNER_SECRET: "test-scanner-secret-0123456789abcdef", state, scannerCalls };
 }
 
 function uploadRequest({ name, bytes, declaredLength = bytes.byteLength }) {
@@ -77,6 +84,49 @@ test("upload stores a valid PDF under a server-generated private key and strips 
   assert.match(env.state.objects[0].key, new RegExp(`^private/${workspaceId}/[0-9a-f-]{36}$`));
   assert.equal(env.state.objects[0].options.customMetadata.workspace_id, workspaceId);
   assert.equal(env.state.objects[0].options.customMetadata.sha256, result.file.sha256);
+  assert.equal(env.scannerCalls.length, 1);
+  assert.equal(env.scannerCalls[0].headers.get("x-file-scanner-secret"), env.FILE_SCANNER_SECRET);
+  assert.deepEqual(new Uint8Array(await env.scannerCalls[0].arrayBuffer()), bytes);
+  assert.equal(env.state.queries.length > 0, true);
+});
+
+test("upload fails closed when the private malware scanner is not configured", async () => {
+  const env = uploadEnvironment();
+  delete env.FILE_SCANNER;
+  const bytes = new TextEncoder().encode("%PDF-1.7\nconteúdo");
+
+  await assert.rejects(filesHandler(uploadRequest({ name: "documento.pdf", bytes }), env,
+    "/api/files", { workspace_id: workspaceId }), (error) => error instanceof AuthError && error.status === 503);
+  assert.equal(env.state.objects.length, 0);
+  assert.equal(env.state.queries.length, 0);
+});
+
+test("upload blocks content reported as infected before touching storage", async () => {
+  const env = uploadEnvironment();
+  env.FILE_SCANNER.fetch = async () => new Response(JSON.stringify({ clean: false }), { status: 422 });
+  const bytes = new TextEncoder().encode("%PDF-1.7\nconteúdo");
+
+  await assert.rejects(filesHandler(uploadRequest({ name: "documento.pdf", bytes }), env,
+    "/api/files", { workspace_id: workspaceId }), (error) => error instanceof AuthError && error.status === 415);
+  assert.equal(env.state.objects.length, 0);
+  assert.equal(env.state.queries.length, 0);
+});
+
+test("upload fails closed when scanner service errors or returns an invalid result", async (t) => {
+  const bytes = new TextEncoder().encode("%PDF-1.7\nconteúdo");
+  for (const [name, fetch] of [
+    ["service unavailable", async () => { throw new Error("offline"); }],
+    ["invalid response", async () => Response.json({ clean: false })]
+  ]) {
+    await t.test(name, async () => {
+      const env = uploadEnvironment();
+      env.FILE_SCANNER.fetch = fetch;
+      await assert.rejects(filesHandler(uploadRequest({ name: "documento.pdf", bytes }), env,
+        "/api/files", { workspace_id: workspaceId }), (error) => error instanceof AuthError && error.status === 503);
+      assert.equal(env.state.objects.length, 0);
+      assert.equal(env.state.queries.length, 0);
+    });
+  }
 });
 
 test("upload rejects an oversized declared body before touching storage", async () => {

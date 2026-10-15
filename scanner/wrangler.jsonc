@@ -1,0 +1,20 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "nivel-creator-file-scanner",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-10-15",
+  "workers_dev": false,
+  "containers": [
+    {
+      "class_name": "ClamScanner",
+      "image": "./Dockerfile",
+      "instance_type": "standard-1",
+      "max_instances": 3
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "SCANNER", "class_name": "ClamScanner" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ClamScanner"] }],
+  "observability": { "enabled": true, "logs": { "enabled": true } }
+}

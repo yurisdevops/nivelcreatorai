@@ -10,6 +10,7 @@
     "test": "node --test"
   },
   "devDependencies": {
+    "@cloudflare/containers": "^0.3.7",
     "wrangler": "^4.36.0"
   }
 }

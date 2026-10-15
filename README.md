@@ -21,7 +21,7 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 - Diagnóstico com quota (2 no trial, 8 no pago), que exige métricas com fonte e período e não inventa score quando os dados não existem.
 - Conexão de conta profissional pelo Instagram Login da Meta, state OAuth de uso único, consentimento de insights separado do consentimento de IA, token AES-GCM vinculado ao workspace e renovação preventiva.
 - Captura diária de alcance, visualizações, interações, visitas ao perfil e seguidores pela API oficial; métricas não retornadas para uma conta ou permissão ficam marcadas como indisponíveis.
-- Biblioteca privada em R2, com verificação de assinatura dos arquivos, limite de 25 MB por upload, quota atômica de 250 MB no trial e 2 GB no plano pago, downloads autenticados e exclusão com trilha de auditoria.
+- Biblioteca privada em R2, com verificação de assinatura e varredura ClamAV em Worker/Container privado antes de gravar o arquivo, limite de 25 MB por upload, quota atômica de 250 MB no trial e 2 GB no plano pago, downloads autenticados e exclusão com trilha de auditoria.
 - Planejamento editorial semanal via Gemini, histórico privado, sugestões revisáveis, envio idempotente da pauta ao calendário e quota de 1 plano no trial e 4 por ciclo pago.
 - Calendário privado com fluxo de conteúdo em etapas e campanhas UGC para registrar marcas, entregáveis, prazos e status.
 - Agente pessoal com histórico por workspace e quota (30 mensagens no trial, 200 no pago); conteúdo de conversa não autoriza ações externas.
@@ -39,11 +39,15 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 3. Copie `.dev.vars.example` para `.dev.vars` e preencha `SUPABASE_URL`, `SUPABASE_ANON_KEY` e `GEMINI_API_KEY` com credenciais próprias. Nunca coloque credenciais de serviço no navegador nem versionadas no Git.
 4. Crie uma base D1 exclusiva: `npx wrangler d1 create nivel-creator`. Substitua `replace-with-your-d1-database-id` em `wrangler.jsonc` pelo `database_id` retornado.
 5. Aplique o esquema local: `npm run db:local` (inclui o controle global diário de IA).
-6. Rode `npm run dev` e abra `http://localhost:8787`.
+6. Configure e inicie o Worker do scanner em `scanner/` antes do app. O scanner usa Docker e uma instância Cloudflare Container `standard-1` (4 GiB de memória) com a imagem oficial ClamAV; em desenvolvimento, rode `npx wrangler dev --config scanner/wrangler.jsonc` com Docker disponível.
+7. Gere um segredo aleatório de pelo menos 32 bytes e configure o mesmo valor como `FILE_SCANNER_SECRET` no `.dev.vars` do app e em `scanner/.dev.vars`. Em produção, use `npx wrangler secret put FILE_SCANNER_SECRET` para cada Worker.
+8. Rode `npm run dev` e abra `http://localhost:8787`.
 
-Rode `npm test` para executar os testes de sessão/MFA/CSRF, BOLA entre workspaces, validação de assinatura/tamanho/nome de arquivo e os testes de cobrança, entitlement e entrega de notificações disponíveis no projeto.
+Rode `npm test` para executar os testes de sessão/MFA/CSRF, BOLA entre workspaces, validação de assinatura/tamanho/nome e varredura de arquivo, além dos testes de cobrança, entitlement e entrega de notificações disponíveis no projeto.
 
-Crie também o bucket privado usado pela Biblioteca com `npx wrangler r2 bucket create nivel-creator-private`. A configuração não publica o bucket; uploads, downloads e exclusões passam pelo Worker autenticado. Os tipos são validados pela assinatura do conteúdo, não pelo nome ou cabeçalho enviado pelo navegador.
+Crie também o bucket privado usado pela Biblioteca com `npx wrangler r2 bucket create nivel-creator-private`. A configuração não publica o bucket; uploads, downloads e exclusões passam pelo Worker autenticado. O app valida a assinatura do conteúdo e encaminha cada upload para o service binding privado do scanner, que consulta o ClamAV antes de permitir qualquer gravação em R2. Se o scanner estiver ausente, indisponível ou retornar uma resposta inválida, o upload falha fechado. O app não envia o conteúdo do arquivo a um fornecedor externo de antivírus.
+
+Faça o primeiro deploy do scanner com `npx wrangler deploy --config scanner/wrangler.jsonc` a partir da raiz do projeto. Configure o segredo no app com `npx wrangler secret put FILE_SCANNER_SECRET` e no scanner com `npx wrangler secret put FILE_SCANNER_SECRET --config scanner/wrangler.jsonc`; depois faça o deploy do app com `npx wrangler deploy`. O scanner não publica `workers.dev` nem rota pública; o app o alcança pelo service binding. O deploy de Containers exige Docker ou mecanismo compatível e pode levar alguns minutos para provisionar. Use `standard-1` ou maior: a base de assinaturas e o `clamd` precisam de memória suficiente. A imagem oficial inicia a atualização diária das assinaturas; aguarde o socket local do `clamd` estar pronto antes de aceitar uploads.
 
 Para produção, configure a URL de callback do domínio final no Supabase, defina `SUPABASE_URL` e `SUPABASE_ANON_KEY` como secrets do Worker e aplique as migrações remotas conscientemente com `npx wrangler d1 migrations apply nivel-creator --remote`.
 
@@ -64,7 +68,7 @@ Supabase recomenda validar JWTs com `getClaims` ou validar o token no Auth serve
 - Revisar e aprovar o app Meta, validar a conexão e a compatibilidade das métricas na conta sandbox/desenvolvedor; a implementação depende dessas permissões e não publica conteúdo.
 - Aprovisionar e configurar os recursos reais de Supabase, D1 e Gemini para o ambiente de beta.
 - E-mail transacional de lembretes usa o binding Cloudflare Email Service e só envia após opt-in. Configure `EMAIL_FROM_ADDRESS`/`EMAIL_FROM_NAME`, habilite um domínio de envio na conta Cloudflare e aplique a migração `0014_transactional_notification_email.sql`. O Email Sending está em beta e requer Workers Paid.
-- Varredura antimalware e política operacional de retenção dos objetos R2.
+- Política operacional de retenção dos objetos R2.
 - Asaas: conectar e validar conta sandbox e avaliar Pix Automático. O Pix disponível é avulso e precisa ser pago novamente a cada ciclo.
 - Aprovação jurídica da política de retenção, backups restauráveis e observabilidade operacional. Os rate limits do Worker são distribuídos por localização Cloudflare e permissivos; não substituem o teto global diário nem servem como contabilidade exata.
 - Revisão jurídica, LGPD, segurança e testes descritos na especificação mestre.
