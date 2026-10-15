@@ -39,7 +39,7 @@ export async function ensureWorkspace(env, user) {
 
 export async function getWorkspace(env, userId) {
   const db = requireDatabase(env);
-  const account = await db.prepare(`SELECT w.id AS workspace_id, w.name AS workspace_name, u.auth_subject,
+  const account = await db.prepare(`SELECT w.id AS workspace_id, w.name AS workspace_name, u.auth_subject, u.email,
       p.niche, p.goals_json, p.voice, p.onboarding_completed_at,
       p.ai_data_consent_at,
       t.starts_at AS trial_starts_at, t.ends_at AS trial_ends_at, t.status AS trial_status,

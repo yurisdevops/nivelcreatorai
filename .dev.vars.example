@@ -6,3 +6,6 @@ SUPABASE_SECRET_KEY=
 GEMINI_API_KEY=COLOQUE_SUA_CHAVE_LOCAL
 # Opcional; padrão atual do projeto: gemini-3.8-flash
 GEMINI_MODEL=gemini-3.8-flash
+# Optional Asaas Sandbox credentials; never use a production key with this implementation.
+ASAAS_API_KEY=
+ASAAS_WEBHOOK_TOKEN=

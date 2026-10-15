@@ -20,14 +20,15 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 - Agente pessoal com histórico por workspace e quota (30 mensagens no trial, 200 no pago); conteúdo de conversa não autoriza ações externas.
 - Notificações internas de encerramento do trial, agendadas por Cron com deduplicação; leitura e pausa por workspace.
 - Configurações de perfil e consentimento, exportação JSON do workspace e solicitação de exclusão com remoção do usuário Auth por tarefa agendada.
-- Migrações D1 versionadas para dados centrais, calendário, agente, consentimento de IA, planos editoriais e preferências de notificações.
+- Checkout recorrente de cartão no Asaas sandbox, confirmação via webhook autenticado, deduplicação, processamento assíncrono, cancelamento e tolerância de 3 dias para inadimplência.
+- Migrações D1 versionadas para dados centrais, calendário, agente, consentimento de IA, planos editoriais, notificações, direitos de dados e cobrança.
 - Cabeçalhos básicos de segurança, CSP sem scripts inline, validação de origem e limite de corpo nas rotas JSON.
 
 ## Desenvolvimento local
 
 1. Instale Node.js e, nesta pasta, rode `npm install`.
 2. Crie um projeto Supabase exclusivo para o Nivel Creator AI. Ative confirmação de e-mail e adicione `http://localhost:8787/auth/callback` às URLs de redirecionamento permitidas.
-3. Copie `.dev.vars.example` para `.dev.vars` e preencha `SUPABASE_URL`, `SUPABASE_ANON_KEY` e `GEMINI_API_KEY` com credenciais próprias. Nunca coloque credenciais de serviço no navegador nem versionadas no Git.
+3. Copie `.dev.vars.example` para `.dev.vars` e preencha `SUPABASE_URL`, `SUPABASE_ANON_KEY` e `GEMINI_API_KEY` com credenciais próprias. Para testar cobrança, preencha também a chave Asaas Sandbox e o token de autenticação configurado no webhook. Nunca coloque credenciais de serviço no navegador nem versionadas no Git.
 4. Crie uma base D1 exclusiva: `npx wrangler d1 create nivel-creator`. Substitua `replace-with-your-d1-database-id` em `wrangler.jsonc` pelo `database_id` retornado.
 5. Aplique o esquema local: `npm run db:local`.
 6. Rode `npm run dev` e abra `http://localhost:8787`.
@@ -48,8 +49,8 @@ Supabase recomenda validar JWTs com `getClaims` ou validar o token no Auth serve
 - Aprovisionar e configurar os recursos reais de Supabase, D1 e Gemini para o ambiente de beta.
 - E-mail transacional para notificações continua desativado até configurar um provedor e preferências de envio.
 - Arquivos privados via R2 com limites, verificação de conteúdo e URLs curtas.
-- Asaas em sandbox: checkout, webhooks autenticados, deduplicação e reconciliação.
-- MFA para administradores, exportação/exclusão de dados, rotina de retenção, backups restauráveis, limites de tráfego/custo e observabilidade operacional.
+- Asaas: conectar e validar conta sandbox, reconciliação diária e fluxo de Pix; a implementação atual só oferece recorrência por cartão em sandbox.
+- MFA para administradores, rotina automática de retenção, backups restauráveis, limites globais de tráfego/custo e observabilidade operacional.
 - Revisão jurídica, LGPD, segurança e testes descritos na especificação mestre.
 
 Não existe conexão com a conta Asaas ou Nivel Studio, OAuth do Instagram, publicação automática ou provisionamento de infraestrutura remota por este código. As migrações ainda não foram aplicadas.

@@ -805,9 +805,13 @@ async function loadSettings() {
     document.querySelector('#settings-ai-consent').checked = data.profile.ai_consent;
     const trialEnd = data.trial.ends_at ? new Date(data.trial.ends_at) : null;
     const subscription = data.subscription;
-    if (subscription?.status === 'active' || (subscription?.status === 'canceled' && Date.parse(subscription.period_end || '') > Date.now())) {
-      document.querySelector('#settings-access-status').textContent = `Acesso pago ${subscription.status === 'canceled' ? 'até o fim do período contratado' : 'ativo'}.`;
-      document.querySelector('#settings-subscription').textContent = subscription.status === 'canceled' ? `Cancelada · acesso até ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(subscription.period_end))}` : 'Ativa';
+    if (subscription?.status === 'active' || subscription?.status === 'past_due' || (subscription?.status === 'canceled' && Date.parse(subscription.period_end || '') > Date.now())) {
+      document.querySelector('#settings-access-status').textContent = subscription.status === 'past_due'
+        ? 'Pagamento pendente. O acesso segue durante o prazo de tolerância.'
+        : `Acesso pago ${subscription.status === 'canceled' ? 'até o fim do período contratado' : 'ativo'}.`;
+      document.querySelector('#settings-subscription').textContent = subscription.status === 'canceled'
+        ? `Cancelada · acesso até ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(subscription.period_end))}`
+        : subscription.status === 'past_due' ? 'Pagamento pendente' : 'Ativa';
     } else if (trialEnd && trialEnd.getTime() > Date.now()) {
       document.querySelector('#settings-access-status').textContent = 'Seu período de teste está ativo.';
       document.querySelector('#settings-subscription').textContent = 'Nenhuma assinatura';
@@ -818,6 +822,29 @@ async function loadSettings() {
     document.querySelector('#settings-trial-end').textContent = trialEnd
       ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeStyle: 'short' }).format(trialEnd)
       : 'Não iniciado';
+    const billingResult = await fetch('/api/billing/status', { credentials: 'same-origin' });
+    if (billingResult.ok) {
+      const billing = await billingResult.json();
+      const startButton = document.querySelector('#start-subscription');
+      const resume = document.querySelector('#resume-checkout');
+      const cancelButton = document.querySelector('#cancel-subscription');
+      const note = document.querySelector('#billing-note');
+      const hasPaidAccess = billing.subscription && ['active', 'past_due'].includes(billing.subscription.status);
+      const canceledUntilFuture = billing.subscription?.status === 'canceled' && Date.parse(billing.subscription.period_end || '') > Date.now();
+      startButton.hidden = !billing.configured || Boolean(hasPaidAccess) || canceledUntilFuture;
+      cancelButton.hidden = !billing.configured || !hasPaidAccess || billing.subscription.cancel_at_period_end;
+      resume.hidden = Boolean(hasPaidAccess) || canceledUntilFuture || billing.checkout?.status !== 'pending' || !billing.checkout.checkout_url;
+      if (billing.subscription?.status === 'canceled' && canceledUntilFuture) {
+        note.textContent = `Renovação cancelada. Seu acesso permanece até ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(billing.subscription.period_end))}.`;
+      }
+      if (!billing.configured) note.textContent = 'O checkout sandbox ainda não foi configurado neste ambiente.';
+      if (!resume.hidden && billing.checkout?.status === 'pending' && billing.checkout.checkout_url) {
+        resume.href = billing.checkout.checkout_url;
+        resume.hidden = false;
+        document.querySelector('#settings-first-due').textContent = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(`${billing.checkout.first_due_date}T12:00:00Z`));
+        note.textContent = 'Checkout pendente. O acesso será confirmado por webhook do Asaas.';
+      }
+    }
     const deletionResult = await fetch('/api/account/deletion', { credentials: 'same-origin' });
     const deletionData = await deletionResult.json();
     const pending = deletionData.deletion_request;
@@ -829,6 +856,42 @@ async function loadSettings() {
     moduleLoaded.configuracoes = true;
   } catch (error) { announce(error.message || 'Não foi possível carregar as configurações.'); }
 }
+
+document.querySelector('#start-subscription').addEventListener('click', async (event) => {
+  if (!document.querySelector('#billing-recurring-consent').checked) {
+    announce('Confirme a assinatura mensal recorrente para continuar.');
+    return;
+  }
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    const result = await fetch('/api/billing/checkout', { method: 'POST', credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify({ accept_recurring: true }) });
+    const data = await result.json();
+    if (result.status === 401) { location.href = '/entrar.html?redirect=%2F'; return; }
+    if (!result.ok) throw new Error(data.error || 'Não foi possível abrir o checkout.');
+    document.querySelector('#settings-first-due').textContent = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(`${data.first_due_date}T12:00:00Z`));
+    location.assign(data.checkout_url);
+  } catch (error) { announce(error.message || 'Não foi possível abrir o checkout.'); }
+  finally { button.disabled = false; }
+});
+
+document.querySelector('#cancel-subscription').addEventListener('click', async (event) => {
+  if (!window.confirm('Cancelar a renovação? Seu acesso pago continuará até o fim do período já contratado.')) return;
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    const result = await fetch('/api/billing/cancel', { method: 'POST', credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify({ confirm_cancel: true }) });
+    const data = await result.json();
+    if (result.status === 401) { location.href = '/entrar.html?redirect=%2F'; return; }
+    if (!result.ok) throw new Error(data.error || 'Não foi possível cancelar a renovação.');
+    moduleLoaded.configuracoes = false;
+    await loadSettings();
+    announce('Renovação cancelada. O acesso segue até o fim do período pago.');
+  } catch (error) { announce(error.message || 'Não foi possível cancelar a renovação.'); }
+  finally { button.disabled = false; }
+});
 
 document.querySelector('#settings-profile-form').addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -959,6 +1022,11 @@ async function loadAccount() {
 }
 
 loadAccount();
+
+const paymentReturn = new URLSearchParams(location.search).get('pagamento');
+if (paymentReturn === 'aguardando-webhook') announce('Checkout concluído. O Asaas está confirmando o pagamento; o acesso muda após o webhook.');
+if (paymentReturn === 'cancelado') announce('Checkout cancelado. Sua assinatura ainda não foi ativada.');
+if (paymentReturn === 'expirado') announce('Checkout expirado. Você pode iniciar outro nas configurações.');
 
 document.querySelector('#logout').addEventListener('click', async () => {
   try {

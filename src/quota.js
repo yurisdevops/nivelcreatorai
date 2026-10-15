@@ -14,7 +14,10 @@ export async function resolveEntitlement(env, workspaceId, requireActive = true)
   if (row.trial_status === "trialing" && Date.parse(row.trial_end) > now) {
     return { cycleKey: `trial:${row.trial_start}`, limit: 10, plan: "trial" };
   }
-  if (["active", "canceled"].includes(row.subscription_status) && Date.parse(row.period_end || "") > now) {
+  const periodEnd = Date.parse(row.period_end || "");
+  const hasPaidAccess = ["active", "canceled"].includes(row.subscription_status) && periodEnd > now;
+  const inPastDueGrace = row.subscription_status === "past_due" && periodEnd + 72 * 60 * 60 * 1000 > now;
+  if (hasPaidAccess || inPastDueGrace) {
     const start = row.period_start || row.period_end;
     return { cycleKey: `subscription:${start}`, limit: 60, plan: "paid" };
   }
