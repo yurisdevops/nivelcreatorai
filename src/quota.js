@@ -1,19 +1,7 @@
 import { AuthError } from "./auth.js";
 
-export async function resolveEntitlement(env, workspaceId, requireActive = true) {
-  const row = await env.DB.prepare(`SELECT t.starts_at AS trial_start, t.ends_at AS trial_end, t.status AS trial_status,
-      s.period_start, s.period_end, s.status AS subscription_status
-    FROM trials t
-    LEFT JOIN subscriptions s ON s.workspace_id=t.workspace_id
-    WHERE t.workspace_id=?1 LIMIT 1`).bind(workspaceId).first();
-  if (!row) {
-    if (requireActive) throw new AuthError(402, "Seu acesso ainda não está ativo.");
-    return null;
-  }
-  const now = Date.now();
-  if (row.trial_status === "trialing" && Date.parse(row.trial_end) > now) {
-    return { cycleKey: `trial:${row.trial_start}`, limit: 10, plan: "trial" };
-  }
+export function entitlementFromRow(row, now = Date.now()) {
+  if (!row) return null;
   const periodEnd = Date.parse(row.period_end || "");
   const hasPaidAccess = ["active", "canceled"].includes(row.subscription_status) && periodEnd > now;
   const inPastDueGrace = row.subscription_status === "past_due" && periodEnd + 72 * 60 * 60 * 1000 > now;
@@ -21,7 +9,21 @@ export async function resolveEntitlement(env, workspaceId, requireActive = true)
     const start = row.period_start || row.period_end;
     return { cycleKey: `subscription:${start}`, limit: 60, plan: "paid" };
   }
-  if (requireActive) throw new AuthError(402, "Seu período de acesso terminou. Consulte as opções de assinatura para continuar.");
+  if (row.trial_status === "trialing" && Date.parse(row.trial_end) > now) {
+    return { cycleKey: `trial:${row.trial_start}`, limit: 10, plan: "trial" };
+  }
+  return null;
+}
+
+export async function resolveEntitlement(env, workspaceId, requireActive = true) {
+  const row = await env.DB.prepare(`SELECT t.starts_at AS trial_start, t.ends_at AS trial_end, t.status AS trial_status,
+      s.period_start, s.period_end, s.status AS subscription_status
+    FROM trials t
+    LEFT JOIN subscriptions s ON s.workspace_id=t.workspace_id
+    WHERE t.workspace_id=?1 LIMIT 1`).bind(workspaceId).first();
+  const entitlement = entitlementFromRow(row);
+  if (entitlement) return entitlement;
+  if (requireActive) throw new AuthError(402, row ? "Seu período de acesso terminou. Consulte as opções de assinatura para continuar." : "Seu acesso ainda não está ativo.");
   return null;
 }
 

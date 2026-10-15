@@ -28,7 +28,7 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 - Notificações internas de encerramento do trial, agendadas por Cron com deduplicação; leitura e pausa por workspace.
 - Configurações de perfil e consentimento, exportação JSON do workspace e solicitação de exclusão com remoção do usuário Auth por tarefa agendada.
 - Retenção automática opcional após 30 dias sem acesso vigente, com aviso no app sete dias antes, proteção de assinaturas ativas e tabela operacional para retenções legais; vem desativada até a aprovação e habilitação da política.
-- Checkout recorrente de cartão no Asaas sandbox, confirmação via webhook autenticado, deduplicação, processamento assíncrono, cancelamento e tolerância de 3 dias para inadimplência.
+- Checkout recorrente de cartão e Pix avulso por ciclo mensal no Asaas sandbox. O Pix não cria renovação; só ativa acesso após webhook autenticado que confirma checkout pago, valor e modalidade. Eventos são deduplicados e processados em fila; cartão mantém cancelamento e tolerância de 3 dias para inadimplência.
 - Migrações D1 versionadas para dados centrais, calendário, agente, consentimento de IA, planos editoriais, notificações, direitos de dados, cobrança, retenção e orçamento global de IA.
 - Cabeçalhos básicos de segurança, CSP sem scripts inline, validação de origem e limite de corpo nas rotas JSON.
 
@@ -41,6 +41,8 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 5. Aplique o esquema local: `npm run db:local` (inclui o controle global diário de IA).
 6. Rode `npm run dev` e abra `http://localhost:8787`.
 
+Rode `npm test` para executar os testes unitários de cobrança e regras de entitlement disponíveis no projeto.
+
 Crie também o bucket privado usado pela Biblioteca com `npx wrangler r2 bucket create nivel-creator-private`. A configuração não publica o bucket; uploads, downloads e exclusões passam pelo Worker autenticado. Os tipos são validados pela assinatura do conteúdo, não pelo nome ou cabeçalho enviado pelo navegador.
 
 Para produção, configure a URL de callback do domínio final no Supabase, defina `SUPABASE_URL` e `SUPABASE_ANON_KEY` como secrets do Worker e aplique as migrações remotas conscientemente com `npx wrangler d1 migrations apply nivel-creator --remote`.
@@ -49,7 +51,7 @@ Para habilitar exclusão automática da conta, configure `SUPABASE_SECRET_KEY` c
 
 Para habilitar a conexão com Instagram, crie um app Meta com Instagram Login para contas profissionais e configure no Worker `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `INSTAGRAM_REDIRECT_URI`, `META_GRAPH_API_VERSION` e `INSTAGRAM_TOKEN_ENCRYPTION_KEY`. Cadastre exatamente a callback `/auth/instagram/callback` na configuração de OAuth do app. Gere a chave uma vez com `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`; mantenha-a em Workers Secrets em produção e faça backup seguro, pois perdê-la impede a leitura dos tokens já criptografados. Solicite as permissões `instagram_business_basic` e `instagram_business_manage_insights`; o acesso de creators externos requer modo Live e a análise de permissões da Meta. A sincronização roda pelo Cron depois da conexão.
 
-Para testar cobrança em sandbox, preencha também `ASAAS_API_KEY` e `ASAAS_WEBHOOK_TOKEN`, e configure `/webhooks/asaas` no painel Asaas com o mesmo token.
+Para testar cobrança em sandbox, preencha também `ASAAS_API_KEY` e `ASAAS_WEBHOOK_TOKEN`, e configure `/webhooks/asaas` no painel Asaas com o mesmo token. O checkout de cartão cria uma assinatura recorrente após a jornada do pagador; o checkout Pix é avulso e exige novo pagamento em cada ciclo. Em ambos, o app ativa o acesso só depois do webhook autenticado.
 
 O template de confirmação do Supabase deve enviar o link para `/auth/callback` com `token_hash` e `type=email`. O template de recuperação usa o mesmo callback com `type=recovery`. A rota valida o token no provedor e só então cria os cookies da sessão.
 
@@ -63,7 +65,7 @@ Supabase recomenda validar JWTs com `getClaims` ou validar o token no Auth serve
 - Aprovisionar e configurar os recursos reais de Supabase, D1 e Gemini para o ambiente de beta.
 - E-mail transacional para notificações continua desativado até configurar um provedor e preferências de envio.
 - Varredura antimalware e política operacional de retenção dos objetos R2.
-- Asaas: conectar e validar conta sandbox, reconciliação diária e fluxo de Pix; a implementação atual só oferece recorrência por cartão em sandbox.
+- Asaas: conectar e validar conta sandbox, implementar reconciliação diária e avaliar Pix Automático. O Pix disponível é avulso e precisa ser pago novamente a cada ciclo.
 - Aprovação jurídica da política de retenção, backups restauráveis e observabilidade operacional. Os rate limits do Worker são distribuídos por localização Cloudflare e permissivos; não substituem o teto global diário nem servem como contabilidade exata.
 - Revisão jurídica, LGPD, segurança e testes descritos na especificação mestre.
 

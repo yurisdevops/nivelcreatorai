@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "db:local": "wrangler d1 migrations apply nivel-creator --local"
+    "db:local": "wrangler d1 migrations apply nivel-creator --local",
+    "test": "node --test"
   },
   "devDependencies": {
     "wrangler": "^4.36.0"

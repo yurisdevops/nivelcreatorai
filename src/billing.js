@@ -23,22 +23,56 @@ function dueDateFor(account) {
   return trialDate > minimum ? trialDate : minimum;
 }
 
-function monthAfter(dateValue) {
+export function monthAfter(dateValue) {
   const source = new Date(dateValue);
   if (!Number.isFinite(source.getTime())) return new Date(Date.now() + 30 * 86400000).toISOString();
   const day = source.getUTCDate();
   const end = new Date(Date.UTC(source.getUTCFullYear(), source.getUTCMonth() + 1, 1));
   const lastDay = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() + 1, 0)).getUTCDate();
   end.setUTCDate(Math.min(day, lastDay));
+  end.setUTCHours(source.getUTCHours(), source.getUTCMinutes(), source.getUTCSeconds(), source.getUTCMilliseconds());
   return end.toISOString();
 }
 
-async function createCheckout(request, env, account) {
+export function validPixCheckoutPayment(checkout) {
+  if (checkout?.status !== "PAID" || !Array.isArray(checkout?.billingTypes) || !checkout.billingTypes.includes("PIX") ||
+      !Array.isArray(checkout?.chargeTypes) || !checkout.chargeTypes.includes("DETACHED") ||
+      !Array.isArray(checkout.items) || !checkout.items.length) return false;
+  const cents = checkout.items.reduce((total, item) => {
+    const value = Number(item?.value);
+    const quantity = Number(item?.quantity);
+    if (!Number.isFinite(value) || value < 0 || !Number.isInteger(quantity) || quantity < 1 || quantity > 10) return NaN;
+    return total + Math.round(value * 100) * quantity;
+  }, 0);
+  return cents === Math.round(PRICE * 100);
+}
+
+export function checkoutPayload(origin, externalReference, billingType, firstDueDate) {
+  const recurring = billingType === "CREDIT_CARD";
+  const successCode = recurring ? "aguardando-webhook" : "pix-aguardando-webhook";
+  return {
+    billingTypes: [billingType],
+    chargeTypes: [recurring ? "RECURRENT" : "DETACHED"],
+    minutesToExpire: 1440,
+    externalReference,
+    callback: {
+      successUrl: `${origin}/?pagamento=${successCode}`,
+      cancelUrl: `${origin}/?pagamento=cancelado`,
+      expiredUrl: `${origin}/?pagamento=expirado`
+    },
+    items: [{ name: "Nivel Creator AI", description: recurring ? "Assinatura mensal recorrente" : "Acesso por um ciclo mensal, pagamento avulso", quantity: 1, value: PRICE }],
+    ...(recurring ? { subscription: { cycle: "MONTHLY", nextDueDate: firstDueDate } } : {})
+  };
+}
+
+async function createCheckout(request, env, account, billingType = "CREDIT_CARD") {
   if (!env.ASAAS_API_KEY || !env.ASAAS_WEBHOOK_TOKEN) throw new AuthError(503, "Configure a chave e o token do webhook do Asaas sandbox antes de habilitar cobrança.");
   if (!env.DB) throw new AuthError(503, "O banco de dados ainda não foi configurado.");
   assertSameOrigin(request);
   const body = await readJson(request);
-  if (body.accept_recurring !== true) throw new AuthError(400, "Confirme a recorrência mensal antes de abrir o checkout.");
+  const recurring = billingType === "CREDIT_CARD";
+  if (recurring && body.accept_recurring !== true) throw new AuthError(400, "Confirme a recorrência mensal antes de abrir o checkout.");
+  if (!recurring && body.accept_one_time !== true) throw new AuthError(400, "Confirme que o Pix é um pagamento avulso, sem renovação automática.");
   const existingSubscription = await env.DB.prepare(`SELECT status, period_end FROM subscriptions WHERE workspace_id=?1`)
     .bind(account.workspace_id).first();
   const paidPeriodEnd = Date.parse(existingSubscription?.period_end || "");
@@ -48,17 +82,20 @@ async function createCheckout(request, env, account) {
   if (hasPaidAccess) {
     throw new AuthError(409, "Você já tem uma assinatura com acesso vigente.");
   }
-  const existing = await env.DB.prepare(`SELECT id, checkout_url, first_due_date, created_at FROM billing_checkout_intents
+  const existing = await env.DB.prepare(`SELECT id, checkout_url, first_due_date, created_at, billing_type FROM billing_checkout_intents
     WHERE workspace_id=?1 AND status='pending' ORDER BY created_at DESC LIMIT 1`).bind(account.workspace_id).first();
+  if (existing && existing.billing_type !== billingType) {
+    throw new AuthError(409, "Existe um checkout pendente de outra modalidade. Retome esse checkout ou aguarde a expiração.");
+  }
   if (existing?.checkout_url && Date.now() - Date.parse(existing.created_at) < 24 * 60 * 60 * 1000) {
     return { checkout_url: existing.checkout_url, first_due_date: existing.first_due_date, price: PRICE, reused: true };
   }
   if (existing && !existing.checkout_url && Date.now() - Date.parse(existing.created_at) < 10 * 60 * 1000) {
     throw new AuthError(409, "A preparação do checkout já está em andamento. Aguarde alguns minutos.");
   }
-  const latest = await env.DB.prepare(`SELECT status FROM billing_checkout_intents WHERE workspace_id=?1
+  const latest = await env.DB.prepare(`SELECT id, status FROM billing_checkout_intents WHERE workspace_id=?1
     ORDER BY created_at DESC LIMIT 1`).bind(account.workspace_id).first();
-  if (latest?.status === "paid") {
+  if (latest?.status === "paid" && existingSubscription?.status === "pending" && existingSubscription.checkout_intent_id === latest.id) {
     throw new AuthError(409, "O pagamento foi confirmado e a assinatura está sendo sincronizada. Atualize esta página em instantes.");
   }
   if (existing) await env.DB.prepare(`UPDATE billing_checkout_intents SET status='expired', updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
@@ -66,12 +103,12 @@ async function createCheckout(request, env, account) {
 
   const intentId = crypto.randomUUID();
   const externalReference = `${PRODUCT_REFERENCE}${intentId}`;
-  const firstDueDate = dueDateFor(account);
+  const firstDueDate = recurring ? dueDateFor(account) : new Date().toISOString().slice(0, 10);
   try {
     await env.DB.batch([
       env.DB.prepare(`INSERT INTO billing_checkout_intents
         (id, workspace_id, external_reference, billing_type, first_due_date, status)
-        VALUES (?1, ?2, ?3, 'CREDIT_CARD', ?4, 'pending')`).bind(intentId, account.workspace_id, externalReference, firstDueDate),
+        VALUES (?1, ?2, ?3, ?4, ?5, 'pending')`).bind(intentId, account.workspace_id, externalReference, billingType, firstDueDate),
       env.DB.prepare(`INSERT INTO subscriptions (id, workspace_id, provider_id, status, checkout_intent_id)
         VALUES (?1, ?2, ?3, 'pending', ?4)
         ON CONFLICT(workspace_id) DO UPDATE SET provider_id=excluded.provider_id, status='pending',
@@ -79,26 +116,16 @@ async function createCheckout(request, env, account) {
         .bind(crypto.randomUUID(), account.workspace_id, `checkout:${intentId}`, intentId)
     ]);
   } catch {
-    const competing = await env.DB.prepare(`SELECT checkout_url, first_due_date FROM billing_checkout_intents
+    const competing = await env.DB.prepare(`SELECT checkout_url, first_due_date, billing_type FROM billing_checkout_intents
       WHERE workspace_id=?1 AND status='pending' ORDER BY created_at DESC LIMIT 1`).bind(account.workspace_id).first();
+    if (competing && competing.billing_type !== billingType) {
+      throw new AuthError(409, "Existe um checkout pendente de outra modalidade. Retome esse checkout ou aguarde a expiração.");
+    }
     if (competing?.checkout_url) return { checkout_url: competing.checkout_url, first_due_date: competing.first_due_date, price: PRICE, reused: true };
     throw new AuthError(409, "Já existe um checkout sendo preparado. Aguarde alguns minutos e tente novamente.");
   }
 
-  const origin = new URL(request.url).origin;
-  const payload = {
-    billingTypes: ["CREDIT_CARD"],
-    chargeTypes: ["RECURRENT"],
-    minutesToExpire: 1440,
-    externalReference,
-    callback: {
-      successUrl: `${origin}/?pagamento=aguardando-webhook`,
-      cancelUrl: `${origin}/?pagamento=cancelado`,
-      expiredUrl: `${origin}/?pagamento=expirado`
-    },
-    items: [{ name: "Nivel Creator AI", description: "Assinatura mensal", quantity: 1, value: PRICE }],
-    subscription: { cycle: "MONTHLY", nextDueDate: firstDueDate }
-  };
+  const payload = checkoutPayload(new URL(request.url).origin, externalReference, billingType, firstDueDate);
   let result;
   try {
     result = await asaasRequest(env, "/checkouts", { method: "POST", body: JSON.stringify(payload) });
@@ -125,9 +152,10 @@ async function cancelSubscription(request, env, account) {
   assertSameOrigin(request);
   const body = await readJson(request);
   if (body.confirm_cancel !== true) throw new AuthError(400, "Confirme o cancelamento da renovação.");
-  const subscription = await env.DB.prepare(`SELECT id, provider_id, status, period_end FROM subscriptions WHERE workspace_id=?1`)
+  const subscription = await env.DB.prepare(`SELECT s.id, s.provider_id, s.status, s.period_end, i.billing_type
+    FROM subscriptions s LEFT JOIN billing_checkout_intents i ON i.id=s.checkout_intent_id WHERE s.workspace_id=?1`)
     .bind(account.workspace_id).first();
-  if (!subscription || !["active", "past_due"].includes(subscription.status) || subscription.provider_id.startsWith("checkout:")) {
+  if (!subscription || subscription.billing_type === "PIX" || !["active", "past_due"].includes(subscription.status) || subscription.provider_id.startsWith("checkout:")) {
     throw new AuthError(409, "Não há uma assinatura ativa para cancelar.");
   }
   let result;
@@ -151,7 +179,10 @@ function safeWebhookPayload(body) {
     const checkout = body.checkout;
     payload.checkout = {
       id: checkout.id, status: checkout.status, externalReference: checkout.externalReference,
-      customer: checkout.customer, items: Array.isArray(checkout.items) ? checkout.items.slice(0, 10).map((item) => ({ name: item.name, value: item.value, quantity: item.quantity })) : undefined
+      customer: checkout.customer,
+      billingTypes: Array.isArray(checkout.billingTypes) ? checkout.billingTypes.filter((type) => ["PIX", "CREDIT_CARD"].includes(type)) : undefined,
+      chargeTypes: Array.isArray(checkout.chargeTypes) ? checkout.chargeTypes.filter((type) => ["DETACHED", "RECURRENT", "INSTALLMENT"].includes(type)) : undefined,
+      items: Array.isArray(checkout.items) ? checkout.items.slice(0, 10).map((item) => ({ name: item.name, value: item.value, quantity: item.quantity })) : undefined
     };
   }
   if (body.subscription && typeof body.subscription === "object") {
@@ -224,9 +255,25 @@ async function processWebhookEvent(env, event) {
     if (!intent) return checkout.externalReference?.startsWith(PRODUCT_REFERENCE) ? "retry" : "ignored";
     if (event.event === "CHECKOUT_PAID") {
       if (checkout.status !== "PAID") return "retry";
+      if (!['pending', 'paid'].includes(intent.status)) return "ignored";
+      const customerId = typeof checkout.customer === "string" ? checkout.customer : null;
+      if (intent.billing_type === "PIX") {
+        if (!validPixCheckoutPayment(checkout)) return "ignored";
+        const periodStart = new Date().toISOString();
+        const periodEnd = monthAfter(periodStart);
+        await db.batch([
+          db.prepare(`UPDATE billing_checkout_intents SET status='paid', provider_customer_id=COALESCE(?1,provider_customer_id),
+            updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?2 AND status='pending'`)
+            .bind(customerId, intent.id),
+          db.prepare(`UPDATE subscriptions SET provider_id=?1, status='active', period_start=?2, period_end=?3,
+            cancel_at_period_end=0 WHERE checkout_intent_id=?4 AND provider_id=?5 AND status='pending'`)
+            .bind(`pix:${intent.id}`, periodStart, periodEnd, intent.id, `checkout:${intent.id}`)
+        ]);
+        return "processed";
+      }
       await db.prepare(`UPDATE billing_checkout_intents SET status='paid', provider_customer_id=COALESCE(?1,provider_customer_id),
         updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?2 AND status IN ('pending','paid')`)
-        .bind(typeof checkout.customer === "string" ? checkout.customer : null, intent.id).run();
+        .bind(customerId, intent.id).run();
       return "processed";
     }
     const nextStatus = event.event === "CHECKOUT_CANCELED" ? "canceled" : "expired";
@@ -269,7 +316,18 @@ async function processWebhookEvent(env, event) {
 
   if (event.payment) {
     const payment = event.payment;
-    if (!payment.subscription) return "ignored";
+    if (!payment.subscription) {
+      if (typeof payment.externalReference !== "string" || !payment.externalReference.startsWith(PRODUCT_REFERENCE)) return "ignored";
+      const intent = await db.prepare(`SELECT id, billing_type FROM billing_checkout_intents WHERE external_reference=?1`)
+        .bind(payment.externalReference).first();
+      if (!intent || intent.billing_type !== "PIX") return "ignored";
+      if (["PAYMENT_REFUNDED", "PAYMENT_PARTIALLY_REFUNDED", "PAYMENT_CHARGEBACK_REQUESTED", "PAYMENT_RECEIVED_IN_CASH_UNDONE"].includes(event.event)) {
+        await db.prepare(`UPDATE subscriptions SET status='suspended' WHERE checkout_intent_id=?1 AND provider_id=?2`)
+          .bind(intent.id, `pix:${intent.id}`).run();
+        return "processed";
+      }
+      return "ignored";
+    }
     const current = await db.prepare(`SELECT s.workspace_id, s.status, s.period_start, i.status AS intent_status
       FROM subscriptions s LEFT JOIN billing_checkout_intents i ON i.id=s.checkout_intent_id WHERE s.provider_id=?1`)
       .bind(payment.subscription).first();
@@ -344,14 +402,16 @@ export async function billingHandler(request, env, path, account) {
   if (path === "/api/billing/status" && request.method === "GET") {
     if (!env.DB) throw new AuthError(503, "O banco de dados ainda não foi configurado.");
     const [subscription, intent] = await Promise.all([
-      env.DB.prepare(`SELECT status, period_start, period_end, cancel_at_period_end FROM subscriptions WHERE workspace_id=?1`).bind(account.workspace_id).first(),
-      env.DB.prepare(`SELECT status, checkout_url, first_due_date, created_at FROM billing_checkout_intents
+      env.DB.prepare(`SELECT s.status, s.period_start, s.period_end, s.cancel_at_period_end, i.billing_type
+        FROM subscriptions s LEFT JOIN billing_checkout_intents i ON i.id=s.checkout_intent_id WHERE s.workspace_id=?1`).bind(account.workspace_id).first(),
+      env.DB.prepare(`SELECT status, billing_type, checkout_url, first_due_date, created_at FROM billing_checkout_intents
         WHERE workspace_id=?1 ORDER BY created_at DESC LIMIT 1`).bind(account.workspace_id).first()
     ]);
     return { subscription: subscription || null, checkout: intent || null,
       configured: Boolean(env.ASAAS_API_KEY && env.ASAAS_WEBHOOK_TOKEN) };
   }
-  if (path === "/api/billing/checkout" && request.method === "POST") return createCheckout(request, env, account);
+  if (path === "/api/billing/checkout" && request.method === "POST") return createCheckout(request, env, account, "CREDIT_CARD");
+  if (path === "/api/billing/pix-checkout" && request.method === "POST") return createCheckout(request, env, account, "PIX");
   if (path === "/api/billing/checkout" && request.method !== "POST") throw new AuthError(405, "Método não permitido.");
   if (path === "/api/billing/cancel" && request.method === "POST") return cancelSubscription(request, env, account);
   return null;

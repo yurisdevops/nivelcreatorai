@@ -1102,14 +1102,32 @@ async function loadSettings() {
     if (billingResult.ok) {
       const billing = await billingResult.json();
       const startButton = document.querySelector('#start-subscription');
+      const pixButton = document.querySelector('#start-pix-checkout');
       const resume = document.querySelector('#resume-checkout');
       const cancelButton = document.querySelector('#cancel-subscription');
       const note = document.querySelector('#billing-note');
-      const hasPaidAccess = billing.subscription && ['active', 'past_due'].includes(billing.subscription.status);
+      const periodEnd = Date.parse(billing.subscription?.period_end || '');
+      const now = Date.now();
+      const hasPaidAccess = billing.subscription?.status === 'active' && periodEnd > now ||
+        billing.subscription?.status === 'past_due' && periodEnd + 72 * 60 * 60 * 1000 > now;
       const canceledUntilFuture = billing.subscription?.status === 'canceled' && Date.parse(billing.subscription.period_end || '') > Date.now();
-      startButton.hidden = !billing.configured || Boolean(hasPaidAccess) || canceledUntilFuture;
-      cancelButton.hidden = !billing.configured || !hasPaidAccess || billing.subscription.cancel_at_period_end;
-      resume.hidden = Boolean(hasPaidAccess) || canceledUntilFuture || billing.checkout?.status !== 'pending' || !billing.checkout.checkout_url;
+      const checkoutPending = billing.checkout?.status === 'pending' && Boolean(billing.checkout.checkout_url);
+      const canStartCheckout = billing.configured && !hasPaidAccess && !canceledUntilFuture && !checkoutPending;
+      startButton.hidden = !canStartCheckout;
+      pixButton.hidden = !canStartCheckout;
+      document.querySelector('#billing-recurring-consent').closest('label').hidden = !canStartCheckout;
+      document.querySelector('#billing-pix-consent').closest('label').hidden = !canStartCheckout;
+      cancelButton.hidden = !billing.configured || !hasPaidAccess || billing.subscription?.cancel_at_period_end || billing.subscription?.billing_type === 'PIX';
+      resume.hidden = !checkoutPending;
+      if (checkoutPending) resume.textContent = billing.checkout.billing_type === 'PIX' ? 'Retomar pagamento Pix ↗' : 'Retomar checkout ↗';
+      if (billing.checkout?.status === 'pending' && billing.checkout.billing_type === 'PIX') {
+        document.querySelector('#settings-first-due').textContent = 'Pagamento Pix pendente';
+        note.textContent = 'O pagamento Pix é avulso. O ciclo só começa após a confirmação por webhook do Asaas e não renova automaticamente.';
+      }
+      if (billing.subscription?.billing_type === 'PIX' && hasPaidAccess) {
+        document.querySelector('#settings-subscription').textContent = `Pix avulso · acesso até ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(billing.subscription.period_end))}`;
+        note.textContent = 'Este ciclo foi pago por Pix e não renova automaticamente. Você poderá fazer outro pagamento ao fim do acesso vigente.';
+      }
       if (billing.subscription?.status === 'canceled' && canceledUntilFuture) {
         note.textContent = `Renovação cancelada. Seu acesso permanece até ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(billing.subscription.period_end))}.`;
       }
@@ -1262,6 +1280,24 @@ document.querySelector('#start-subscription').addEventListener('click', async (e
     document.querySelector('#settings-first-due').textContent = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(`${data.first_due_date}T12:00:00Z`));
     location.assign(data.checkout_url);
   } catch (error) { announce(error.message || 'Não foi possível abrir o checkout.'); }
+  finally { button.disabled = false; }
+});
+
+document.querySelector('#start-pix-checkout').addEventListener('click', async (event) => {
+  if (!document.querySelector('#billing-pix-consent').checked) {
+    announce('Confirme que o Pix é avulso e não cria renovação automática.');
+    return;
+  }
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    const result = await fetch('/api/billing/pix-checkout', { method: 'POST', credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify({ accept_one_time: true }) });
+    const data = await result.json();
+    if (result.status === 401) { location.href = '/entrar.html?redirect=%2F'; return; }
+    if (!result.ok) throw new Error(data.error || 'Não foi possível abrir o checkout Pix.');
+    location.assign(data.checkout_url);
+  } catch (error) { announce(error.message || 'Não foi possível abrir o checkout Pix.'); }
   finally { button.disabled = false; }
 });
 
@@ -1419,6 +1455,7 @@ loadAccount();
 
 const paymentReturn = new URLSearchParams(location.search).get('pagamento');
 if (paymentReturn === 'aguardando-webhook') announce('Checkout concluído. O Asaas está confirmando o pagamento; o acesso muda após o webhook.');
+if (paymentReturn === 'pix-aguardando-webhook') announce('Checkout Pix concluído. O ciclo avulso só começa após a confirmação por webhook do Asaas.');
 if (paymentReturn === 'cancelado') announce('Checkout cancelado. Sua assinatura ainda não foi ativada.');
 if (paymentReturn === 'expirado') announce('Checkout expirado. Você pode iniciar outro nas configurações.');
 const instagramReturn = new URLSearchParams(location.search).get('instagram');
