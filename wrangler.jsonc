@@ -13,7 +13,7 @@
     {
       "binding": "DB",
       "database_name": "nivel-creator",
-      "database_id": "replace-with-your-d1-database-id",
+      "database_id": "1375cf14-8c76-4b02-97fb-02e73584c067",
       "migrations_dir": "migrations"
     }
   ],
