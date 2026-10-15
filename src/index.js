@@ -12,6 +12,7 @@ import { diagnosticsHandler } from "./diagnostics.js";
 import { planningHandler } from "./planning.js";
 import { dashboardHandler } from "./dashboard.js";
 import { notificationCronHandler, notificationHandler } from "./notifications.js";
+import { accountDataHandler, processDeletionQueue } from "./account_data.js";
 
 const securityHeaders = {
   "content-security-policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'",
@@ -22,9 +23,10 @@ const securityHeaders = {
   "permissions-policy": "camera=(), microphone=(), geolocation=()"
 };
 
-function response(body, status = 200, cookies = []) {
+function response(body, status = 200, cookies = [], extraHeaders = {}) {
   const headers = new Headers({ "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
   for (const [name, value] of Object.entries(securityHeaders)) headers.set(name, value);
+  for (const [name, value] of Object.entries(extraHeaders)) headers.set(name, value);
   for (const cookie of cookies) headers.append("set-cookie", cookie);
   return new Response(JSON.stringify(body), { status, headers });
 }
@@ -147,7 +149,10 @@ async function accountHandler(request, env, path) {
       workspace: { name: account.workspace_name },
       profile: { niche: account.niche, goals: JSON.parse(account.goals_json), voice: account.voice,
         completed: Boolean(account.onboarding_completed_at), ai_consent: Boolean(account.ai_data_consent_at) },
-      trial: { status: account.trial_status, starts_at: account.trial_starts_at, ends_at: account.trial_ends_at }
+      trial: { status: account.trial_status, starts_at: account.trial_starts_at, ends_at: account.trial_ends_at },
+      subscription: account.subscription_status ? { status: account.subscription_status,
+        period_start: account.subscription_period_start, period_end: account.subscription_period_end,
+        cancel_at_period_end: Boolean(account.cancel_at_period_end) } : null
     }, 200, cookies);
   }
 
@@ -175,6 +180,20 @@ export default {
 
       const account = await accountHandler(request, env, url.pathname);
       if (account) return account;
+
+      if (url.pathname.startsWith("/api/account/")) {
+        if (!isProviderConfigured(env)) throw new AuthError(503, "Configure Supabase Auth e D1 para acessar os dados da conta.");
+        const { user, cookies } = await requireUser(request, env);
+        const workspace = await getWorkspace(env, user.id);
+        if (!workspace) throw new AuthError(404, "Seu espaço não foi encontrado.");
+        const result = await accountDataHandler(request, env, url.pathname, workspace);
+        if (result?.export) return response(result.export, 200, cookies, {
+          "content-disposition": `attachment; filename="nivel-creator-ai-export-${new Date().toISOString().slice(0, 10)}.json"`
+        });
+        if (result?.created !== undefined) return response(result, result.created ? 202 : 200,
+          result.created ? clearSessionCookies() : cookies);
+        if (result) return response(result, 200, cookies);
+      }
 
       if (url.pathname === "/api/dashboard") {
         if (!isProviderConfigured(env)) throw new AuthError(503, "Configure Supabase Auth e D1 para acessar seu painel.");
@@ -232,6 +251,6 @@ export default {
     }
   },
   async scheduled(_event, env, ctx) {
-    ctx.waitUntil(notificationCronHandler(env));
+    ctx.waitUntil(Promise.all([notificationCronHandler(env), processDeletionQueue(env)]));
   }
 };

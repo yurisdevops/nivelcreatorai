@@ -8,7 +8,8 @@ const moduleViews = {
   planejamento: document.querySelector('#view-planejamento'),
   calendario: document.querySelector('#view-calendario'),
   campanhas: document.querySelector('#view-campanhas'),
-  agente: document.querySelector('#view-agente')
+  agente: document.querySelector('#view-agente'),
+  configuracoes: document.querySelector('#view-configuracoes')
 };
 const homeSections = [...contentWrap.children].filter((element) => !Object.values(moduleViews).includes(element));
 let toastTimer;
@@ -169,11 +170,11 @@ viewLinks.forEach((link) => link.addEventListener('click', (event) => {
   }
 }));
 
-const moduleLoaded = { roteiros: false, diagnostico: false, planejamento: false, calendario: false, campanhas: false, agente: false };
+const moduleLoaded = { roteiros: false, diagnostico: false, planejamento: false, calendario: false, campanhas: false, agente: false, configuracoes: false };
 function showModule(name) {
   homeSections.forEach((element) => { element.hidden = true; });
   Object.entries(moduleViews).forEach(([key, element]) => { element.hidden = key !== name; });
-  const labels = { roteiros: 'Estúdio Criativo', diagnostico: 'Diagnóstico IA', planejamento: 'Planejamento', calendario: 'Calendário', campanhas: 'Campanhas UGC', agente: 'Agente pessoal' };
+  const labels = { roteiros: 'Estúdio Criativo', diagnostico: 'Diagnóstico IA', planejamento: 'Planejamento', calendario: 'Calendário', campanhas: 'Campanhas UGC', agente: 'Agente pessoal', configuracoes: 'Configurações' };
   document.querySelector('.crumb').innerHTML = `Seu espaço <span>/</span> ${labels[name]}`;
   if (moduleLoaded[name]) return;
   if (name === 'roteiros') loadScripts();
@@ -182,6 +183,7 @@ function showModule(name) {
   if (name === 'calendario') loadCalendar();
   if (name === 'campanhas') loadCampaigns();
   if (name === 'agente') loadAgent();
+  if (name === 'configuracoes') loadSettings();
 }
 
 function updateQuota(quota) {
@@ -790,6 +792,106 @@ async function loadHomeDashboard() {
     if (result.ok) renderHomeDashboard(data);
   } catch { /* Keep honest empty states if dashboard data is temporarily unavailable. */ }
 }
+
+async function loadSettings() {
+  try {
+    const result = await fetch('/api/me', { credentials: 'same-origin' });
+    if (result.status === 401) { location.href = '/entrar.html?redirect=%2F'; return; }
+    const data = await result.json();
+    if (!result.ok) throw new Error(data.error || 'Não foi possível carregar as configurações.');
+    document.querySelector('#settings-niche').value = data.profile.niche || '';
+    document.querySelector('#settings-goal').value = data.profile.goals[0] || '';
+    document.querySelector('#settings-voice').value = data.profile.voice || '';
+    document.querySelector('#settings-ai-consent').checked = data.profile.ai_consent;
+    const trialEnd = data.trial.ends_at ? new Date(data.trial.ends_at) : null;
+    const subscription = data.subscription;
+    if (subscription?.status === 'active' || (subscription?.status === 'canceled' && Date.parse(subscription.period_end || '') > Date.now())) {
+      document.querySelector('#settings-access-status').textContent = `Acesso pago ${subscription.status === 'canceled' ? 'até o fim do período contratado' : 'ativo'}.`;
+      document.querySelector('#settings-subscription').textContent = subscription.status === 'canceled' ? `Cancelada · acesso até ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(subscription.period_end))}` : 'Ativa';
+    } else if (trialEnd && trialEnd.getTime() > Date.now()) {
+      document.querySelector('#settings-access-status').textContent = 'Seu período de teste está ativo.';
+      document.querySelector('#settings-subscription').textContent = 'Nenhuma assinatura';
+    } else {
+      document.querySelector('#settings-access-status').textContent = 'Seu período de acesso terminou. Seus dados continuam disponíveis para exportação.';
+      document.querySelector('#settings-subscription').textContent = 'Nenhuma assinatura ativa';
+    }
+    document.querySelector('#settings-trial-end').textContent = trialEnd
+      ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeStyle: 'short' }).format(trialEnd)
+      : 'Não iniciado';
+    const deletionResult = await fetch('/api/account/deletion', { credentials: 'same-origin' });
+    const deletionData = await deletionResult.json();
+    const pending = deletionData.deletion_request;
+    const deletionStatus = document.querySelector('#deletion-status');
+    if (pending) {
+      deletionStatus.textContent = `Solicitação ${pending.status === 'completed' ? 'concluída' : 'em processamento'} desde ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(pending.requested_at))}.`;
+      document.querySelector('#deletion-form').hidden = pending.status === 'pending' || pending.status === 'processing';
+    }
+    moduleLoaded.configuracoes = true;
+  } catch (error) { announce(error.message || 'Não foi possível carregar as configurações.'); }
+}
+
+document.querySelector('#settings-profile-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const body = {
+    niche: document.querySelector('#settings-niche').value.trim(),
+    goal: document.querySelector('#settings-goal').value.trim(),
+    voice: document.querySelector('#settings-voice').value.trim(),
+    ai_consent: document.querySelector('#settings-ai-consent').checked
+  };
+  try {
+    const result = await fetch('/api/profile', { method: 'PUT', credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await result.json();
+    if (!result.ok) throw new Error(data.error || 'Não foi possível salvar seu perfil.');
+    announce('Perfil e consentimento atualizados.');
+    await loadAccount();
+  } catch (error) { announce(error.message || 'Não foi possível salvar seu perfil.'); }
+});
+
+document.querySelector('#export-account-data').addEventListener('click', async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    const result = await fetch('/api/account/export', { credentials: 'same-origin' });
+    if (result.status === 401) { location.href = '/entrar.html?redirect=%2F'; return; }
+    if (!result.ok) {
+      const data = await result.json();
+      throw new Error(data.error || 'Não foi possível exportar seus dados.');
+    }
+    const blob = await result.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `nivel-creator-ai-export-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    announce('Exportação preparada para download.');
+  } catch (error) { announce(error.message || 'Não foi possível exportar seus dados.'); }
+  finally { button.disabled = false; }
+});
+
+document.querySelector('#deletion-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (document.querySelector('#delete-confirmation').value !== 'EXCLUIR') {
+    announce('Digite EXCLUIR para confirmar.');
+    return;
+  }
+  if (!window.confirm('A exclusão remove o login e os dados deste workspace. Deseja continuar?')) return;
+  const button = event.currentTarget.querySelector('button[type="submit"]');
+  button.disabled = true;
+  try {
+    const result = await fetch('/api/account/deletion', { method: 'POST', credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify({ confirmation: 'EXCLUIR' }) });
+    const data = await result.json();
+    if (!result.ok) throw new Error(data.error || 'Não foi possível registrar a exclusão.');
+    document.querySelector('#deletion-status').textContent = 'Solicitação registrada. A remoção será processada em segundo plano.';
+    event.currentTarget.hidden = true;
+    setTimeout(() => location.assign('/entrar.html?exclusao=solicitada'), 1800);
+  } catch (error) {
+    announce(error.message || 'Não foi possível registrar a exclusão.');
+    button.disabled = false;
+  }
+});
 
 async function loadAgent() {
   try {

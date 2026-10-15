@@ -39,15 +39,18 @@ export async function ensureWorkspace(env, user) {
 
 export async function getWorkspace(env, userId) {
   const db = requireDatabase(env);
-  const account = await db.prepare(`SELECT w.id AS workspace_id, w.name AS workspace_name,
+  const account = await db.prepare(`SELECT w.id AS workspace_id, w.name AS workspace_name, u.auth_subject,
       p.niche, p.goals_json, p.voice, p.onboarding_completed_at,
       p.ai_data_consent_at,
-      t.starts_at AS trial_starts_at, t.ends_at AS trial_ends_at, t.status AS trial_status
+      t.starts_at AS trial_starts_at, t.ends_at AS trial_ends_at, t.status AS trial_status,
+      s.status AS subscription_status, s.period_start AS subscription_period_start,
+      s.period_end AS subscription_period_end, s.cancel_at_period_end
     FROM users u
     JOIN memberships m ON m.user_id=u.id AND m.role='owner'
     JOIN workspaces w ON w.id=m.workspace_id AND w.owner_id=u.id
     JOIN creator_profiles p ON p.workspace_id=w.id
     LEFT JOIN trials t ON t.workspace_id=w.id
+    LEFT JOIN subscriptions s ON s.workspace_id=w.id
     WHERE u.auth_subject=?1 LIMIT 1`).bind(userId).first();
   return account;
 }

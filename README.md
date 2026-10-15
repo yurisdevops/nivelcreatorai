@@ -19,6 +19,7 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 - Calendário privado com fluxo de conteúdo em etapas e campanhas UGC para registrar marcas, entregáveis, prazos e status.
 - Agente pessoal com histórico por workspace e quota (30 mensagens no trial, 200 no pago); conteúdo de conversa não autoriza ações externas.
 - Notificações internas de encerramento do trial, agendadas por Cron com deduplicação; leitura e pausa por workspace.
+- Configurações de perfil e consentimento, exportação JSON do workspace e solicitação de exclusão com remoção do usuário Auth por tarefa agendada.
 - Migrações D1 versionadas para dados centrais, calendário, agente, consentimento de IA, planos editoriais e preferências de notificações.
 - Cabeçalhos básicos de segurança, CSP sem scripts inline, validação de origem e limite de corpo nas rotas JSON.
 
@@ -32,6 +33,8 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 6. Rode `npm run dev` e abra `http://localhost:8787`.
 
 Para produção, configure a URL de callback do domínio final no Supabase, defina `SUPABASE_URL` e `SUPABASE_ANON_KEY` como secrets do Worker e aplique as migrações remotas conscientemente com `npx wrangler d1 migrations apply nivel-creator --remote`.
+
+Para habilitar exclusão automática da conta, configure `SUPABASE_SECRET_KEY` como secret do Worker (`npx wrangler secret put SUPABASE_SECRET_KEY`). A chave é usada somente pelo Worker para chamar a operação administrativa de exclusão no Supabase Auth. Em desenvolvimento, a variável pode ser preenchida no `.dev.vars` local, que é ignorado pelo Git.
 
 O template de confirmação do Supabase deve enviar o link para `/auth/callback` com `token_hash` e `type=email`. O template de recuperação usa o mesmo callback com `type=recovery`. A rota valida o token no provedor e só então cria os cookies da sessão.
 

@@ -1,6 +1,8 @@
 # Copie para .dev.vars e preencha com o projeto Supabase separado deste produto.
 SUPABASE_URL=https://SEU-PROJETO.supabase.co
 SUPABASE_ANON_KEY=sb_publishable_xxxxxxxxxxxxxxxxxxxxxxxxx
+# Optional, only for self-service account deletion. Keep this server-side; never use it in public/ files.
+SUPABASE_SECRET_KEY=
 GEMINI_API_KEY=COLOQUE_SUA_CHAVE_LOCAL
 # Opcional; padrão atual do projeto: gemini-3.8-flash
 GEMINI_MODEL=gemini-3.8-flash
