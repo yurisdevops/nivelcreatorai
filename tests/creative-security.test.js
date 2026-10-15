@@ -12,7 +12,8 @@ function scriptFixture() {
     ],
     cta: "Salve para consultar depois.",
     caption: "Uma ideia para sua rotina.",
-    hashtags: ["#rotina"]
+    hashtags: ["#rotina"],
+    checklist: ["Separe os itens", "Confira a luz", "Revise o áudio", "Assista ao resultado"]
   };
 }
 

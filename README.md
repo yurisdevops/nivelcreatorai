@@ -13,7 +13,7 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 - Recuperação de senha sem revelar se um e-mail tem conta; a troca usa a sessão curta emitida pelo fluxo de recuperação do Supabase.
 - Provisionamento idempotente de usuário, workspace, membership, perfil e trial de 168 horas depois da confirmação do e-mail.
 - Perfil e consentimento versionado para processamento de briefings, métricas autorizadas e contexto pelo Gemini; geração fica bloqueada até o consentimento, que pode ser retirado no perfil.
-- Estúdio Criativo com geração de roteiros via Gemini, briefings limitados e tratados como conteúdo não confiável, saída estruturada validada e roteiros salvos no workspace.
+- Estúdio Criativo com geração de roteiros via Gemini, briefings limitados e tratados como conteúdo não confiável, saída estruturada validada com checklist de gravação e roteiros salvos no workspace.
 - Reserva de quota por ciclo antes da chamada de IA (10 roteiros no trial e 60 por ciclo pago); falhas liberam a reserva e roteiros persistidos consomem a quota.
 - Orçamento global atômico de IA por dia UTC no D1: cada chamada reserva o custo máximo permitido pela entrada limitada a 64.000 bytes e pelos tokens de saída; ao atingir o limite, novas gerações param até o próximo dia. O custo estimado usa o uso retornado pelo Gemini e fica registrado no workspace.
 - Circuit breaker global do Gemini: após cinco falhas consecutivas, suspende novas chamadas por cinco minutos e só libera o tráfego depois de uma chamada de prova bem-sucedida. Chamadas simultâneas não passam pelo estado semiaberto, e uma prova interrompida pode ser recuperada após 45 segundos.

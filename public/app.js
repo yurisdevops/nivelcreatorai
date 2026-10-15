@@ -411,6 +411,18 @@ function renderScripts(scripts) {
     const caption = document.createElement('p');
     caption.textContent = script.caption;
     card.append(badge, title, hookLabel, hook, scenesTitle, scenes, cta, captionTitle, caption);
+    if (Array.isArray(script.checklist) && script.checklist.length) {
+      const checklistTitle = document.createElement('b');
+      checklistTitle.textContent = 'Checklist de gravação';
+      const checklist = document.createElement('ul');
+      checklist.className = 'script-checklist';
+      for (const entry of script.checklist) {
+        const item = document.createElement('li');
+        item.textContent = entry;
+        checklist.append(item);
+      }
+      card.append(checklistTitle, checklist);
+    }
     if (script.hashtags?.length) {
       const tags = document.createElement('small');
       tags.className = 'script-tags';
