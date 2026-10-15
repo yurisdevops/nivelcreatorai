@@ -2,14 +2,17 @@ import { AuthError } from "./auth.js";
 
 export function entitlementFromRow(row, now = Date.now()) {
   if (!row) return null;
+  const periodStart = Date.parse(row.period_start || "");
   const periodEnd = Date.parse(row.period_end || "");
-  const hasPaidAccess = ["active", "canceled"].includes(row.subscription_status) && periodEnd > now;
-  const inPastDueGrace = row.subscription_status === "past_due" && periodEnd + 72 * 60 * 60 * 1000 > now;
+  const paidPeriodStarted = !row.period_start || (Number.isFinite(periodStart) && periodStart <= now);
+  const hasPaidAccess = ["active", "canceled"].includes(row.subscription_status) && paidPeriodStarted && periodEnd > now;
+  const inPastDueGrace = row.subscription_status === "past_due" && paidPeriodStarted && periodEnd + 72 * 60 * 60 * 1000 > now;
   if (hasPaidAccess || inPastDueGrace) {
     const start = row.period_start || row.period_end;
     return { cycleKey: `subscription:${start}`, limit: 60, plan: "paid" };
   }
-  if (row.trial_status === "trialing" && Date.parse(row.trial_end) > now) {
+  const trialStart = Date.parse(row.trial_start || "");
+  if (row.trial_status === "trialing" && Number.isFinite(trialStart) && trialStart <= now && Date.parse(row.trial_end) > now) {
     return { cycleKey: `trial:${row.trial_start}`, limit: 10, plan: "trial" };
   }
   return null;

@@ -34,3 +34,28 @@ test("manual Pix paid cycle uses the same paid entitlement as a card cycle", () 
   assert.equal(entitlementFromRow(row, now).plan, "paid");
   assert.equal(entitlementFromRow(row, now).limit, 60);
 });
+
+test("future trial does not grant access early", () => {
+  const row = { trial_status: "trialing", trial_start: "2026-10-15T12:00:01.000Z", trial_end: "2026-10-22T12:00:01.000Z" };
+
+  assert.equal(entitlementFromRow(row, now), null);
+  assert.equal(entitlementFromRow(row, now + 1000).plan, "trial");
+});
+
+test("future paid period does not override an active trial", () => {
+  const row = {
+    trial_status: "trialing", trial_start: "2026-10-10T12:00:00.000Z", trial_end: "2026-10-20T12:00:00.000Z",
+    subscription_status: "active", period_start: "2026-10-20T12:00:00.000Z", period_end: "2026-11-20T12:00:00.000Z"
+  };
+
+  assert.deepEqual(entitlementFromRow(row, now), { cycleKey: "trial:2026-10-10T12:00:00.000Z", limit: 10, plan: "trial" });
+  assert.equal(entitlementFromRow(row, Date.parse("2026-10-20T12:00:00.000Z")).plan, "paid");
+});
+
+test("invalid subscription start cannot grant access", () => {
+  const row = {
+    subscription_status: "active", period_start: "not-a-date", period_end: "2026-11-15T11:00:00.000Z"
+  };
+
+  assert.equal(entitlementFromRow(row, now), null);
+});
