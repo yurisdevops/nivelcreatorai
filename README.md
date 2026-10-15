@@ -41,7 +41,7 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 5. Aplique o esquema local: `npm run db:local` (inclui o controle global diário de IA).
 6. Rode `npm run dev` e abra `http://localhost:8787`.
 
-Rode `npm test` para executar os testes unitários de cobrança e regras de entitlement disponíveis no projeto.
+Rode `npm test` para executar os testes unitários de cobrança, entitlement e entrega de notificações disponíveis no projeto.
 
 Crie também o bucket privado usado pela Biblioteca com `npx wrangler r2 bucket create nivel-creator-private`. A configuração não publica o bucket; uploads, downloads e exclusões passam pelo Worker autenticado. Os tipos são validados pela assinatura do conteúdo, não pelo nome ou cabeçalho enviado pelo navegador.
 
