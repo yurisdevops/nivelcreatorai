@@ -5,6 +5,32 @@ const loginTab = document.querySelector('#login-tab');
 const signupTab = document.querySelector('#signup-tab');
 let mode = 'login';
 let ready = false;
+let mfaRequired = false;
+
+function showMfaLogin(factors) {
+  mfaRequired = true;
+  document.querySelector('.auth-tabs').hidden = true;
+  document.querySelector('label[for="email"]').hidden = true;
+  document.querySelector('#email').hidden = true;
+  document.querySelector('label[for="password"]').hidden = true;
+  document.querySelector('#password').hidden = true;
+  document.querySelector('#email').required = false;
+  document.querySelector('#password').required = false;
+  document.querySelector('#forgot-password').hidden = true;
+  document.querySelector('#mfa-login-group').hidden = false;
+  const select = document.querySelector('#mfa-factor');
+  select.replaceChildren(...factors.map((factor) => {
+    const option = document.createElement('option');
+    option.value = factor.id;
+    option.textContent = factor.friendly_name || 'Autenticador';
+    return option;
+  }));
+  document.querySelector('#auth-title').textContent = 'Confirme sua identidade.';
+  document.querySelector('.auth-intro').textContent = 'Digite o código temporário do seu aplicativo autenticador.';
+  submit.innerHTML = 'Confirmar código <span>→</span>';
+  document.querySelector('#mfa-login-code').required = true;
+  document.querySelector('#mfa-login-code').focus();
+}
 
 function setMode(nextMode) {
   mode = nextMode;
@@ -12,6 +38,15 @@ function setMode(nextMode) {
   const recoveryRequest = mode === 'recover';
   const passwordReset = mode === 'reset';
   const loginLike = mode === 'login';
+  mfaRequired = false;
+  document.querySelector('label[for="email"]').hidden = false;
+  document.querySelector('#email').hidden = false;
+  document.querySelector('#email').required = true;
+  document.querySelector('#password').hidden = recoveryRequest;
+  document.querySelector('label[for="password"]').hidden = recoveryRequest;
+  document.querySelector('#mfa-login-group').hidden = true;
+  document.querySelector('#mfa-login-code').required = false;
+  document.querySelector('#password').required = !recoveryRequest;
   loginTab.classList.toggle('active', !signup);
   signupTab.classList.toggle('active', signup);
   loginTab.setAttribute('aria-selected', String(!signup));
@@ -32,6 +67,11 @@ function setMode(nextMode) {
 loginTab.addEventListener('click', () => setMode('login'));
 signupTab.addEventListener('click', () => setMode('signup'));
 document.querySelector('#forgot-password').addEventListener('click', () => setMode('recover'));
+document.querySelector('#mfa-cancel').addEventListener('click', async () => {
+  await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin',
+    headers: { 'content-type': 'application/json' }, body: '{}' }).catch(() => {});
+  location.replace('/entrar.html');
+});
 
 const query = new URLSearchParams(location.search);
 if (query.has('verificado')) message.textContent = 'E-mail confirmado. Agora entre com sua senha.';
@@ -48,6 +88,12 @@ fetch('/api/auth/status', { credentials: 'same-origin' }).then(async (result) =>
     document.querySelector('#setup-message').hidden = false;
     submit.disabled = true;
     document.querySelectorAll('#auth-form input, .auth-tab, #forgot-password').forEach((control) => { control.disabled = true; });
+  } else {
+    fetch('/api/auth/mfa/status', { credentials: 'same-origin' }).then(async (result) => {
+      if (!result.ok) return;
+      const mfa = await result.json();
+      if (mfa.required || query.has('mfa')) showMfaLogin(mfa.factors);
+    }).catch(() => {});
   }
 }).catch(() => {
   document.querySelector('#setup-message').hidden = false;
@@ -63,6 +109,19 @@ form.addEventListener('submit', async (event) => {
   submit.disabled = true;
     submit.textContent = mode === 'signup' ? 'Criando sua conta…' : mode === 'recover' ? 'Enviando…' : mode === 'reset' ? 'Atualizando…' : 'Verificando…';
   try {
+    if (mfaRequired) {
+      const result = await fetch('/api/auth/mfa/verify-login', { method: 'POST', credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' }, body: JSON.stringify({
+          factor_id: document.querySelector('#mfa-factor').value,
+          code: document.querySelector('#mfa-login-code').value.trim()
+        }) });
+      const data = await result.json();
+      if (!result.ok) throw new Error(data.error || 'Não foi possível validar o código.');
+      const requestedPath = query.get('redirect') || '/';
+      const destination = requestedPath.startsWith('/') && !requestedPath.startsWith('//') ? requestedPath : '/';
+      location.assign(destination);
+      return;
+    }
     if (mode === 'recover') {
       const result = await fetch('/api/auth/recover', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email }) });
       const data = await result.json();
@@ -86,6 +145,10 @@ form.addEventListener('submit', async (event) => {
     });
     const data = await result.json();
     if (!result.ok) throw new Error(data.error || 'Não foi possível concluir. Tente novamente.');
+    if (mode === 'login' && data.mfa_required) {
+      showMfaLogin(data.factors);
+      return;
+    }
     if (mode === 'signup' && data.verification_required) {
       message.textContent = 'Conta criada. Confira seu e-mail para confirmar o endereço e iniciar seu trial.';
       form.reset();
@@ -98,6 +161,6 @@ form.addEventListener('submit', async (event) => {
     message.textContent = error.message || 'Serviço indisponível. Tente novamente em instantes.';
   } finally {
     submit.disabled = !ready;
-    submit.innerHTML = mode === 'signup' ? 'Criar minha conta <span>→</span>' : mode === 'recover' ? 'Enviar link de recuperação <span>→</span>' : mode === 'reset' ? 'Salvar nova senha <span>→</span>' : 'Entrar <span>→</span>';
+    submit.innerHTML = mfaRequired ? 'Confirmar código <span>→</span>' : mode === 'signup' ? 'Criar minha conta <span>→</span>' : mode === 'recover' ? 'Enviar link de recuperação <span>→</span>' : mode === 'reset' ? 'Salvar nova senha <span>→</span>' : 'Entrar <span>→</span>';
   }
 });

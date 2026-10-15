@@ -25,6 +25,13 @@
           <input id="email" name="email" type="email" autocomplete="email" maxlength="254" required placeholder="voce@email.com">
           <label for="password">Senha</label>
           <input id="password" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" required placeholder="Pelo menos 8 caracteres">
+          <div id="mfa-login-group" hidden>
+            <label for="mfa-factor">Autenticador</label>
+            <select id="mfa-factor"></select>
+            <label for="mfa-login-code">Código de verificação</label>
+            <input id="mfa-login-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,8}" maxlength="8" placeholder="Código do aplicativo autenticador">
+            <button class="forgot-password" id="mfa-cancel" type="button">Cancelar e sair</button>
+          </div>
           <button class="forgot-password" id="forgot-password" type="button">Esqueci minha senha</button>
           <div id="confirm-password-group" hidden><label for="confirm-password">Confirme a nova senha</label><input id="confirm-password" type="password" autocomplete="new-password" minlength="8" maxlength="128"></div>
           <p class="form-message" id="form-message" role="status" aria-live="polite"></p>

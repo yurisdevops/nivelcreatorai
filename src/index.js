@@ -1,7 +1,8 @@
 import {
   AuthError, accessTokenFromRequest, assertSameOrigin, authConfigured, authResponseError,
   clearSessionCookies, readJson, requireUser, sessionFromResponse, signIn, signOut,
-  signUp, validCredentials, verifyEmail, recoverPassword, updatePassword
+  signUp, validCredentials, verifyEmail, recoverPassword, updatePassword,
+  enrollTotp, challengeTotp, verifyTotp, removeTotp, verifiedTotpFactors, allTotpFactors
 } from "./auth.js";
 import { cleanProfileInput, ensureWorkspace, getWorkspace, saveProfile } from "./account.js";
 import { creativeHandler } from "./creative.js";
@@ -27,7 +28,8 @@ const securityHeaders = {
 };
 
 const rateLimitedAuthPaths = new Set([
-  "/api/auth/signup", "/api/auth/login", "/api/auth/recover", "/api/auth/password"
+  "/api/auth/signup", "/api/auth/login", "/api/auth/recover", "/api/auth/password",
+  "/api/auth/mfa/verify-login", "/api/auth/mfa/verify-enrollment"
 ]);
 const rateLimitedAiPaths = new Set([
   "/api/creative/generate", "/api/plans", "/api/plans/generate", "/api/agent/messages"
@@ -59,6 +61,78 @@ function isProviderConfigured(env) {
   return authConfigured(env) && Boolean(env.DB);
 }
 
+function providerError(status) {
+  if (status === 429) throw authResponseError(429);
+  if (status >= 500) throw authResponseError(status);
+  throw new AuthError(400, "Não foi possível concluir a configuração do autenticador. Confira o código e tente novamente.");
+}
+
+async function mfaHandler(request, env, path) {
+  if (!path.startsWith("/api/auth/mfa/")) return null;
+  if (!isProviderConfigured(env)) throw new AuthError(503, "Configure Supabase Auth e D1 para gerenciar a autenticação adicional.");
+
+  if (path === "/api/auth/mfa/status" && request.method === "GET") {
+    const session = await requireUser(request, env, { allowMfaPending: true });
+    const factors = session.verifiedFactors || await verifiedTotpFactors(env, session.accessToken);
+    const allFactors = session.mfaFactors || await allTotpFactors(env, session.accessToken);
+    return response({ enabled: factors.length > 0, required: factors.length > 0 && session.assuranceLevel !== "aal2",
+      factors: factors.map(({ id, friendly_name, created_at }) => ({ id, friendly_name, created_at })),
+      pending: allFactors.filter((factor) => factor.status !== "verified").map(({ id, friendly_name, created_at }) => ({ id, friendly_name, created_at })) }, 200, session.cookies);
+  }
+
+  if (path === "/api/auth/mfa/enroll" && request.method === "POST") {
+    assertSameOrigin(request);
+    const body = await readJson(request);
+    const session = await requireUser(request, env, { allowMfaPending: true });
+    const factors = session.verifiedFactors || [];
+    if (factors.length && session.assuranceLevel !== "aal2") throw new AuthError(403, "Confirme o código atual antes de alterar seus fatores.", "mfa_required");
+    const friendlyName = typeof body.name === "string" ? body.name.trim().slice(0, 60) : "Autenticador";
+    const result = await enrollTotp(env, session.accessToken, friendlyName || "Autenticador");
+    if (!result.ok) providerError(result.status);
+    const factor = await result.json();
+    if (factor.type !== "totp" || typeof factor.id !== "string" || typeof factor.totp?.secret !== "string" || typeof factor.totp?.qr_code !== "string") {
+      throw new AuthError(502, "O Supabase não retornou os dados esperados para configurar o autenticador.");
+    }
+    return response({ factor: { id: factor.id, friendly_name: factor.friendly_name, qr_code: factor.totp.qr_code,
+      secret: factor.totp.secret, uri: factor.totp.uri } }, 200, session.cookies);
+  }
+
+  if ((path === "/api/auth/mfa/verify-login" || path === "/api/auth/mfa/verify-enrollment") && request.method === "POST") {
+    assertSameOrigin(request);
+    const body = await readJson(request);
+    const session = await requireUser(request, env, { allowMfaPending: true });
+    const factorId = typeof body.factor_id === "string" ? body.factor_id : "";
+    const code = typeof body.code === "string" ? body.code.trim() : "";
+    if (!/^[0-9a-f-]{36}$/i.test(factorId) || !/^\d{6,8}$/.test(code)) throw new AuthError(400, "Informe o código de 6 a 8 dígitos do autenticador.");
+    const factors = session.verifiedFactors || [];
+    const enrollment = path.endsWith("verify-enrollment");
+    if (enrollment ? factors.length > 0 && session.assuranceLevel !== "aal2" : !factors.some((factor) => factor.id === factorId)) {
+      throw new AuthError(403, "Este autenticador não está disponível para esta sessão.");
+    }
+    const challenge = await challengeTotp(env, session.accessToken, factorId);
+    if (!challenge.ok) providerError(challenge.status);
+    const challengeData = await challenge.json();
+    if (typeof challengeData.id !== "string") throw new AuthError(502, "Não foi possível iniciar a verificação do autenticador.");
+    const verified = await verifyTotp(env, session.accessToken, factorId, challengeData.id, code);
+    if (!verified.ok) providerError(verified.status);
+    const result = await verified.json();
+    if (!result.access_token || !result.refresh_token) throw new AuthError(502, "O Supabase não retornou uma sessão autenticada.");
+    return response({ ok: true }, 200, sessionFromResponse(result));
+  }
+
+  const factorMatch = path.match(/^\/api\/auth\/mfa\/factors\/([0-9a-f-]{36})$/i);
+  if (factorMatch && request.method === "DELETE") {
+    assertSameOrigin(request);
+    const session = await requireUser(request, env);
+    if (!(session.mfaFactors || []).some((factor) => factor.id === factorMatch[1])) throw new AuthError(404, "Autenticador não encontrado.");
+    const result = await removeTotp(env, session.accessToken, factorMatch[1]);
+    if (!result.ok) providerError(result.status);
+    return response({ removed: true }, 200, session.cookies);
+  }
+
+  return null;
+}
+
 async function authHandler(request, env, path) {
   if (path === "/api/auth/status" && request.method === "GET") {
     return response({ configured: isProviderConfigured(env), auth_configured: authConfigured(env), database_configured: Boolean(env.DB) });
@@ -85,7 +159,9 @@ async function authHandler(request, env, path) {
     if (!result.ok) throw authResponseError(result.status);
     const payload = await result.json();
     if (!payload.user?.email_confirmed_at) throw new AuthError(403, "Confirme seu e-mail antes de entrar.");
-    return response({ ok: true }, 200, sessionFromResponse(payload));
+    const factors = await verifiedTotpFactors(env, payload.access_token);
+    return response({ ok: true, mfa_required: factors.length > 0, factors: factors.map(({ id, friendly_name }) => ({ id, friendly_name })) },
+      200, sessionFromResponse(payload));
   }
 
   if (path === "/api/auth/recover" && request.method === "POST") {
@@ -200,9 +276,16 @@ export default {
         const clientIp = request.headers.get("cf-connecting-ip") || "unknown";
         await enforceRateLimit(env.AUTH_RATE_LIMITER, `${url.pathname}:${clientIp}`, "esta ação de acesso");
       }
+      if (request.method === "POST" && ["/api/auth/mfa/verify-login", "/api/auth/mfa/verify-enrollment"].includes(url.pathname)) {
+        const clientIp = request.headers.get("cf-connecting-ip") || "unknown";
+        await enforceRateLimit(env.MFA_RATE_LIMITER, `${url.pathname}:${clientIp}`, "a verificação do autenticador");
+      }
 
       const auth = await authHandler(request, env, url.pathname);
       if (auth) return auth;
+
+      const mfa = await mfaHandler(request, env, url.pathname);
+      if (mfa) return mfa;
 
       if (url.pathname === "/auth/callback") return await callbackHandler(request, env);
       if (url.pathname === "/auth/instagram/callback") return await instagramCallback(request, env);
@@ -311,7 +394,7 @@ export default {
       for (const [name, value] of Object.entries(securityHeaders)) headers.set(name, value);
       return new Response(asset.body, { status: asset.status, statusText: asset.statusText, headers });
     } catch (error) {
-      if (error instanceof AuthError) return response({ error: error.message }, error.status);
+      if (error instanceof AuthError) return response({ error: error.message, ...(error.code ? { code: error.code } : {}) }, error.status);
       if (error?.name === "TimeoutError" || error instanceof TypeError) {
         return response({ error: "Serviço temporariamente indisponível. Tente novamente." }, 503);
       }

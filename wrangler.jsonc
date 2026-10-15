@@ -30,6 +30,11 @@
       "name": "AI_RATE_LIMITER",
       "namespace_id": "2026101502",
       "simple": { "limit": 8, "period": 60 }
+    },
+    {
+      "name": "MFA_RATE_LIMITER",
+      "namespace_id": "2026101503",
+      "simple": { "limit": 8, "period": 60 }
     }
   ],
   "assets": {

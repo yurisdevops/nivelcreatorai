@@ -7,6 +7,7 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 - Painel responsivo com tema azul-marinho e violeta baseado nas referências visuais fornecidas.
 - Painel com quatro métricas vindas dos snapshots mais recentes, estado vazio quando ausentes, origem/período/sincronização e próximas ações derivadas de diagnósticos salvos.
 - Cadastro, login, confirmação de e-mail e logout via Supabase Auth. O Worker guarda os tokens em cookies `HttpOnly`, `Secure` e `SameSite=Lax`; a página não lê esses tokens.
+- MFA TOTP opcional via Supabase Auth: cadastro e remoção de autenticadores, desafio no login e exigência de sessão AAL2 em todas as APIs privadas após a ativação. O Auth do Supabase valida o token antes de o Worker ler o nível de garantia.
 - Verificação da sessão consultando o endpoint autenticado do Supabase antes de autorizar operações privadas.
 - Recuperação de senha sem revelar se um e-mail tem conta; a troca usa a sessão curta emitida pelo fluxo de recuperação do Supabase.
 - Provisionamento idempotente de usuário, workspace, membership, perfil e trial de 168 horas depois da confirmação do e-mail.
@@ -32,7 +33,7 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 ## Desenvolvimento local
 
 1. Instale Node.js e, nesta pasta, rode `npm install`.
-2. Crie um projeto Supabase exclusivo para o Nivel Creator AI. Ative confirmação de e-mail e adicione `http://localhost:8787/auth/callback` às URLs de redirecionamento permitidas.
+2. Crie um projeto Supabase exclusivo para o Nivel Creator AI. Ative confirmação de e-mail e adicione `http://localhost:8787/auth/callback` às URLs de redirecionamento permitidas. Em Authentication → MFA, habilite TOTP e permita verificação de fatores; cada creator pode ativar a opção em Configurações → Segurança da conta.
 3. Copie `.dev.vars.example` para `.dev.vars` e preencha `SUPABASE_URL`, `SUPABASE_ANON_KEY` e `GEMINI_API_KEY` com credenciais próprias. Nunca coloque credenciais de serviço no navegador nem versionadas no Git.
 4. Crie uma base D1 exclusiva: `npx wrangler d1 create nivel-creator`. Substitua `replace-with-your-d1-database-id` em `wrangler.jsonc` pelo `database_id` retornado.
 5. Aplique o esquema local: `npm run db:local`.
@@ -61,12 +62,14 @@ Supabase recomenda validar JWTs com `getClaims` ou validar o token no Auth serve
 - E-mail transacional para notificações continua desativado até configurar um provedor e preferências de envio.
 - Varredura antimalware e política operacional de retenção dos objetos R2.
 - Asaas: conectar e validar conta sandbox, reconciliação diária e fluxo de Pix; a implementação atual só oferece recorrência por cartão em sandbox.
-- MFA para administradores, aprovação jurídica da política de retenção, backups restauráveis, orçamento diário global de IA/circuit breaker e observabilidade operacional. Os rate limits do Worker são distribuídos por localização Cloudflare e permissivos; não substituem orçamento financeiro nem controle global exato.
+- MFA obrigatório para administradores (MFA opcional para creators e enforcement AAL2 de sessões opt-in já estão implementados), aprovação jurídica da política de retenção, backups restauráveis, orçamento diário global de IA/circuit breaker e observabilidade operacional. Os rate limits do Worker são distribuídos por localização Cloudflare e permissivos; não substituem orçamento financeiro nem controle global exato.
 - Revisão jurídica, LGPD, segurança e testes descritos na especificação mestre.
 
 Não existe conexão com a conta Asaas ou Nivel Studio, OAuth do Instagram, publicação automática ou provisionamento de infraestrutura remota por este código. As migrações ainda não foram aplicadas.
 
-Os namespaces `2026101501` e `2026101502` dos rate limiters precisam ser exclusivos nesta conta Cloudflare; altere-os se já estiverem em uso por outro Worker. Os limites são contadores rápidos por localização, conforme a API do Cloudflare, e as quotas transacionais no D1 continuam sendo o controle de consumo por ciclo.
+Os namespaces `2026101501`, `2026101502` e `2026101503` dos rate limiters precisam ser exclusivos nesta conta Cloudflare; altere-os se já estiverem em uso por outro Worker. Os limites são contadores rápidos por localização, conforme a API do Cloudflare, e as quotas transacionais no D1 continuam sendo o controle de consumo por ciclo. O terceiro namespace limita tentativas de MFA; o Supabase Auth também aplica seus limites próprios.
+
+Creators podem cadastrar mais de um autenticador TOTP para reduzir o risco de perder acesso. O app ainda não oferece códigos de recuperação. MFA obrigatório por papel administrativo depende de um fluxo de administração e de uma política de papéis definida.
 
 A migração `0010_workspace_retention.sql` adiciona a fila e os bloqueios de retenção. `DATA_RETENTION_ENABLED` vem como `false`; só altere para `true` após aprovar a política de privacidade e confirmar a cobertura de retenção legal. A rotina exige D1, Supabase Auth administrativo e o bucket R2 configurados. Retenções legais podem ser registradas por operações em `workspace_retention_holds`; não existe endpoint público para criar ou remover esses bloqueios.
 

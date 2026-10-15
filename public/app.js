@@ -1064,6 +1064,7 @@ async function loadSettings() {
     if (result.status === 401) { location.href = '/entrar.html?redirect=%2F'; return; }
     const data = await result.json();
     if (!result.ok) throw new Error(data.error || 'Não foi possível carregar as configurações.');
+    await loadMfaSettings();
     document.querySelector('#settings-niche').value = data.profile.niche || '';
     document.querySelector('#settings-goal').value = data.profile.goals[0] || '';
     document.querySelector('#settings-voice').value = data.profile.voice || '';
@@ -1141,6 +1142,103 @@ async function loadSettings() {
     moduleLoaded.configuracoes = true;
   } catch (error) { announce(error.message || 'Não foi possível carregar as configurações.'); }
 }
+
+async function loadMfaSettings() {
+  const note = document.querySelector('#mfa-settings-note');
+  const button = document.querySelector('#mfa-enroll-button');
+  const list = document.querySelector('#mfa-factor-list');
+  try {
+    const result = await fetch('/api/auth/mfa/status', { credentials: 'same-origin' });
+    const data = await result.json();
+    if (!result.ok) throw new Error(data.error || 'Não foi possível consultar os autenticadores.');
+    list.replaceChildren();
+    const setup = document.querySelector('#mfa-enrollment');
+    setup.hidden = true;
+    button.hidden = data.pending.length > 0 || data.factors.length >= 10;
+    button.textContent = data.factors.length ? 'Adicionar outro autenticador TOTP' : 'Adicionar autenticador TOTP';
+    note.textContent = data.enabled
+      ? 'A autenticação em duas etapas está ativa. Novas sessões precisam de um código de um dos seus aplicativos autenticadores.'
+      : 'Adicione um aplicativo autenticador TOTP para exigir um segundo fator nas próximas sessões.';
+    for (const factor of data.factors) {
+      const row = document.createElement('div');
+      row.className = 'mfa-factor-row';
+      const label = document.createElement('span');
+      label.textContent = factor.friendly_name || 'Autenticador TOTP';
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'button button-outline';
+      remove.textContent = 'Remover';
+      remove.addEventListener('click', async () => {
+        if (!window.confirm('Remover este autenticador? As próximas sessões não pedirão esse segundo fator.')) return;
+        remove.disabled = true;
+        try {
+          const deletion = await fetch(`/api/auth/mfa/factors/${encodeURIComponent(factor.id)}`, { method: 'DELETE', credentials: 'same-origin' });
+          const body = await deletion.json();
+          if (!deletion.ok) throw new Error(body.error || 'Não foi possível remover o autenticador.');
+          await loadMfaSettings();
+          announce('Autenticador removido.');
+        } catch (error) { announce(error.message || 'Não foi possível remover o autenticador.'); }
+        finally { remove.disabled = false; }
+      });
+      row.append(label, remove);
+      list.append(row);
+    }
+    for (const factor of data.pending) {
+      const row = document.createElement('div');
+      row.className = 'mfa-factor-row';
+      const label = document.createElement('span');
+      label.textContent = `${factor.friendly_name || 'Autenticador'} · configuração pendente`;
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'button button-outline';
+      remove.textContent = 'Cancelar';
+      remove.addEventListener('click', async () => {
+        const deletion = await fetch(`/api/auth/mfa/factors/${encodeURIComponent(factor.id)}`, { method: 'DELETE', credentials: 'same-origin' });
+        if (!deletion.ok) { announce('Não foi possível cancelar esta configuração.'); return; }
+        await loadMfaSettings();
+      });
+      row.append(label, remove);
+      list.append(row);
+    }
+  } catch (error) {
+    note.textContent = error.message || 'Não foi possível carregar a autenticação em duas etapas.';
+  }
+}
+
+document.querySelector('#mfa-enroll-button').addEventListener('click', async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    const result = await fetch('/api/auth/mfa/enroll', { method: 'POST', credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Nivel Creator AI' }) });
+    const data = await result.json();
+    if (!result.ok) throw new Error(data.error || 'Não foi possível iniciar a configuração.');
+    document.querySelector('#mfa-qr').src = data.factor.qr_code;
+    document.querySelector('#mfa-qr').dataset.factorId = data.factor.id;
+    document.querySelector('#mfa-secret').textContent = data.factor.secret;
+    document.querySelector('#mfa-enrollment').hidden = false;
+    document.querySelector('#mfa-enrollment-code').focus();
+  } catch (error) { announce(error.message || 'Não foi possível iniciar a configuração.'); }
+  finally { button.disabled = false; }
+});
+
+document.querySelector('#mfa-verify-enrollment').addEventListener('click', async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    const result = await fetch('/api/auth/mfa/verify-enrollment', { method: 'POST', credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify({
+        factor_id: document.querySelector('#mfa-qr').dataset.factorId,
+        code: document.querySelector('#mfa-enrollment-code').value.trim()
+      }) });
+    const data = await result.json();
+    if (!result.ok) throw new Error(data.error || 'Não foi possível validar o código.');
+    document.querySelector('#mfa-enrollment-code').value = '';
+    await loadMfaSettings();
+    announce('Autenticação em duas etapas ativada.');
+  } catch (error) { announce(error.message || 'Não foi possível validar o código.'); }
+  finally { button.disabled = false; }
+});
 
 document.querySelector('#start-subscription').addEventListener('click', async (event) => {
   if (!document.querySelector('#billing-recurring-consent').checked) {
@@ -1281,8 +1379,12 @@ async function loadAccount() {
         location.replace('/entrar.html?redirect=%2F');
         return;
       }
-      if (!accountResult.ok) throw new Error('Não foi possível carregar sua conta.');
       const data = await accountResult.json();
+      if (accountResult.status === 403 && data.code === 'mfa_required') {
+        location.replace('/entrar.html?mfa=1');
+        return;
+      }
+      if (!accountResult.ok) throw new Error('Não foi possível carregar sua conta.');
       document.querySelector('#current-user').textContent = data.user.email;
       document.querySelector('#current-workspace').textContent = data.workspace.name;
       document.querySelector('#logout').hidden = false;

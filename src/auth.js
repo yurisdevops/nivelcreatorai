@@ -4,9 +4,10 @@ const ACCESS_MAX_AGE = 60 * 60;
 const REFRESH_MAX_AGE = 60 * 60 * 24 * 30;
 
 export class AuthError extends Error {
-  constructor(status = 401, message = "Entre na sua conta para continuar.") {
+  constructor(status = 401, message = "Entre na sua conta para continuar.", code = null) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -33,6 +34,25 @@ async function authFetch(env, path, { method = "GET", body, accessToken } = {}) 
     redirect: "error",
     signal: AbortSignal.timeout(8000)
   });
+}
+
+async function listMfaFactors(env, accessToken) {
+  const result = await authFetch(env, "/auth/v1/factors", { accessToken });
+  if (!result.ok) throw new AuthError(503, "Não foi possível consultar a configuração de autenticação adicional.");
+  const data = await result.json();
+  return Array.isArray(data.totp) ? data.totp : [];
+}
+
+// getUser validates the signature and session with Supabase Auth before claims are read here.
+function validatedAssuranceLevel(accessToken) {
+  try {
+    const payload = accessToken.split(".")[1];
+    if (!payload) return "aal1";
+    const decoded = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+    return decoded.aal === "aal2" ? "aal2" : "aal1";
+  } catch {
+    return "aal1";
+  }
 }
 
 function parseCookies(request) {
@@ -100,7 +120,7 @@ async function getUser(env, accessToken) {
   return null;
 }
 
-export async function requireUser(request, env) {
+export async function requireUser(request, env, { allowMfaPending = false } = {}) {
   if (!authConfigured(env)) throw new AuthError(503, "A autenticação ainda não foi configurada.");
   const cookies = parseCookies(request);
   const accessToken = cookies[ACCESS_COOKIE];
@@ -109,7 +129,15 @@ export async function requireUser(request, env) {
 
   if (accessToken) {
     const user = await getUser(env, accessToken);
-    if (user?.id && user.email_confirmed_at) return { user, cookies: [], accessToken };
+    if (user?.id && user.email_confirmed_at) {
+      const mfaFactors = await listMfaFactors(env, accessToken);
+      const verifiedFactors = mfaFactors.filter((factor) => factor.status === "verified");
+      const assuranceLevel = validatedAssuranceLevel(accessToken);
+      if (!allowMfaPending && verifiedFactors.length && assuranceLevel !== "aal2") {
+        throw new AuthError(403, "Confirme o código do seu autenticador para continuar.", "mfa_required");
+      }
+      return { user, cookies: [], accessToken, assuranceLevel, verifiedFactors, mfaFactors };
+    }
   }
 
   if (!refreshToken) throw new AuthError();
@@ -120,7 +148,40 @@ export async function requireUser(request, env) {
   if (!response.ok) throw authResponseError(response.status);
   const session = await response.json();
   if (!session?.user?.id || !session.user.email_confirmed_at) throw new AuthError();
-  return { user: session.user, cookies: sessionCookies(session), accessToken: session.access_token };
+  const mfaFactors = await listMfaFactors(env, session.access_token);
+  const verifiedFactors = mfaFactors.filter((factor) => factor.status === "verified");
+  const assuranceLevel = validatedAssuranceLevel(session.access_token);
+  if (!allowMfaPending && verifiedFactors.length && assuranceLevel !== "aal2") {
+    throw new AuthError(403, "Confirme o código do seu autenticador para continuar.", "mfa_required");
+  }
+  return { user: session.user, cookies: sessionCookies(session), accessToken: session.access_token,
+    assuranceLevel, verifiedFactors, mfaFactors };
+}
+
+export async function enrollTotp(env, accessToken, friendlyName) {
+  return authFetch(env, "/auth/v1/factors", { method: "POST", accessToken,
+    body: { factor_type: "totp", friendly_name: friendlyName } });
+}
+
+export async function challengeTotp(env, accessToken, factorId) {
+  return authFetch(env, `/auth/v1/factors/${encodeURIComponent(factorId)}/challenge`, { method: "POST", accessToken, body: {} });
+}
+
+export async function verifyTotp(env, accessToken, factorId, challengeId, code) {
+  return authFetch(env, `/auth/v1/factors/${encodeURIComponent(factorId)}/verify`, { method: "POST", accessToken,
+    body: { challenge_id: challengeId, code } });
+}
+
+export async function removeTotp(env, accessToken, factorId) {
+  return authFetch(env, `/auth/v1/factors/${encodeURIComponent(factorId)}`, { method: "DELETE", accessToken });
+}
+
+export async function verifiedTotpFactors(env, accessToken) {
+  return (await listMfaFactors(env, accessToken)).filter((factor) => factor.status === "verified");
+}
+
+export async function allTotpFactors(env, accessToken) {
+  return listMfaFactors(env, accessToken);
 }
 
 export function accessTokenFromRequest(request) {
