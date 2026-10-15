@@ -120,6 +120,29 @@ async function getUser(env, accessToken) {
   return null;
 }
 
+export async function requiresAdminMfa(env, authSubject) {
+  if (!env.DB) throw new AuthError(503, "O banco de dados está temporariamente indisponível para validar a política de acesso.");
+  try {
+    const row = await env.DB.prepare(`SELECT EXISTS (
+      SELECT 1 FROM users u JOIN memberships m ON m.user_id=u.id
+      WHERE u.auth_subject=?1 AND m.role='admin'
+    ) AS required`).bind(authSubject).first();
+    return Boolean(row?.required);
+  } catch {
+    throw new AuthError(503, "Não foi possível validar a política de autenticação do administrador.");
+  }
+}
+
+function enforceMfaPolicy({ allowMfaPending, verifiedFactors, assuranceLevel, adminMfaRequired }) {
+  if (allowMfaPending) return;
+  if (adminMfaRequired && !verifiedFactors.length) {
+    throw new AuthError(403, "Configure um autenticador para continuar como administrador.", "mfa_enrollment_required");
+  }
+  if ((verifiedFactors.length || adminMfaRequired) && assuranceLevel !== "aal2") {
+    throw new AuthError(403, "Confirme o código do seu autenticador para continuar.", "mfa_required");
+  }
+}
+
 export async function requireUser(request, env, { allowMfaPending = false } = {}) {
   if (!authConfigured(env)) throw new AuthError(503, "A autenticação ainda não foi configurada.");
   const cookies = parseCookies(request);
@@ -133,10 +156,9 @@ export async function requireUser(request, env, { allowMfaPending = false } = {}
       const mfaFactors = await listMfaFactors(env, accessToken);
       const verifiedFactors = mfaFactors.filter((factor) => factor.status === "verified");
       const assuranceLevel = validatedAssuranceLevel(accessToken);
-      if (!allowMfaPending && verifiedFactors.length && assuranceLevel !== "aal2") {
-        throw new AuthError(403, "Confirme o código do seu autenticador para continuar.", "mfa_required");
-      }
-      return { user, cookies: [], accessToken, assuranceLevel, verifiedFactors, mfaFactors };
+      const adminMfaRequired = await requiresAdminMfa(env, user.id);
+      enforceMfaPolicy({ allowMfaPending, verifiedFactors, assuranceLevel, adminMfaRequired });
+      return { user, cookies: [], accessToken, assuranceLevel, verifiedFactors, mfaFactors, adminMfaRequired };
     }
   }
 
@@ -151,11 +173,10 @@ export async function requireUser(request, env, { allowMfaPending = false } = {}
   const mfaFactors = await listMfaFactors(env, session.access_token);
   const verifiedFactors = mfaFactors.filter((factor) => factor.status === "verified");
   const assuranceLevel = validatedAssuranceLevel(session.access_token);
-  if (!allowMfaPending && verifiedFactors.length && assuranceLevel !== "aal2") {
-    throw new AuthError(403, "Confirme o código do seu autenticador para continuar.", "mfa_required");
-  }
+  const adminMfaRequired = await requiresAdminMfa(env, session.user.id);
+  enforceMfaPolicy({ allowMfaPending, verifiedFactors, assuranceLevel, adminMfaRequired });
   return { user: session.user, cookies: sessionCookies(session), accessToken: session.access_token,
-    assuranceLevel, verifiedFactors, mfaFactors };
+    assuranceLevel, verifiedFactors, mfaFactors, adminMfaRequired };
 }
 
 export async function enrollTotp(env, accessToken, friendlyName) {

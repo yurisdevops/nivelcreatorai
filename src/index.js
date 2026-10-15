@@ -1,6 +1,6 @@
 import {
   AuthError, accessTokenFromRequest, assertSameOrigin, authConfigured, authResponseError,
-  clearSessionCookies, readJson, requireUser, sessionFromResponse, signIn, signOut,
+  clearSessionCookies, readJson, requireUser, requiresAdminMfa, sessionFromResponse, signIn, signOut,
   signUp, validCredentials, verifyEmail, recoverPassword, updatePassword,
   enrollTotp, challengeTotp, verifyTotp, removeTotp, verifiedTotpFactors, allTotpFactors
 } from "./auth.js";
@@ -76,6 +76,8 @@ async function mfaHandler(request, env, path) {
     const factors = session.verifiedFactors || await verifiedTotpFactors(env, session.accessToken);
     const allFactors = session.mfaFactors || await allTotpFactors(env, session.accessToken);
     return response({ enabled: factors.length > 0, required: factors.length > 0 && session.assuranceLevel !== "aal2",
+      admin_mfa_required: session.adminMfaRequired,
+      enroll_required: session.adminMfaRequired && factors.length === 0,
       factors: factors.map(({ id, friendly_name, created_at }) => ({ id, friendly_name, created_at })),
       pending: allFactors.filter((factor) => factor.status !== "verified").map(({ id, friendly_name, created_at }) => ({ id, friendly_name, created_at })) }, 200, session.cookies);
   }
@@ -123,8 +125,15 @@ async function mfaHandler(request, env, path) {
   const factorMatch = path.match(/^\/api\/auth\/mfa\/factors\/([0-9a-f-]{36})$/i);
   if (factorMatch && request.method === "DELETE") {
     assertSameOrigin(request);
-    const session = await requireUser(request, env);
-    if (!(session.mfaFactors || []).some((factor) => factor.id === factorMatch[1])) throw new AuthError(404, "Autenticador não encontrado.");
+    const session = await requireUser(request, env, { allowMfaPending: true });
+    const factor = (session.mfaFactors || []).find((item) => item.id === factorMatch[1]);
+    if (!factor) throw new AuthError(404, "Autenticador não encontrado.");
+    if (factor.status === "verified" && session.assuranceLevel !== "aal2") {
+      throw new AuthError(403, "Confirme o código atual antes de alterar seus fatores.", "mfa_required");
+    }
+    if (session.adminMfaRequired && factor.status === "verified" && (session.verifiedFactors || []).length <= 1) {
+      throw new AuthError(409, "Administradores precisam manter pelo menos um autenticador ativo.", "mfa_last_factor_required");
+    }
     const result = await removeTotp(env, session.accessToken, factorMatch[1]);
     if (!result.ok) providerError(result.status);
     return response({ removed: true }, 200, session.cookies);
@@ -160,7 +169,10 @@ async function authHandler(request, env, path) {
     const payload = await result.json();
     if (!payload.user?.email_confirmed_at) throw new AuthError(403, "Confirme seu e-mail antes de entrar.");
     const factors = await verifiedTotpFactors(env, payload.access_token);
-    return response({ ok: true, mfa_required: factors.length > 0, factors: factors.map(({ id, friendly_name }) => ({ id, friendly_name })) },
+    const adminMfaRequired = await requiresAdminMfa(env, payload.user.id);
+    return response({ ok: true, mfa_required: factors.length > 0,
+      mfa_setup_required: adminMfaRequired && factors.length === 0,
+      factors: factors.map(({ id, friendly_name }) => ({ id, friendly_name })) },
       200, sessionFromResponse(payload));
   }
 

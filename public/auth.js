@@ -6,9 +6,12 @@ const signupTab = document.querySelector('#signup-tab');
 let mode = 'login';
 let ready = false;
 let mfaRequired = false;
+let mfaEnrollmentRequired = false;
+let enrollmentFactorId = '';
 
 function showMfaLogin(factors) {
   mfaRequired = true;
+  mfaEnrollmentRequired = false;
   document.querySelector('.auth-tabs').hidden = true;
   document.querySelector('label[for="email"]').hidden = true;
   document.querySelector('#email').hidden = true;
@@ -32,6 +35,25 @@ function showMfaLogin(factors) {
   document.querySelector('#mfa-login-code').focus();
 }
 
+function showMfaEnrollment() {
+  mfaRequired = false;
+  mfaEnrollmentRequired = true;
+  document.querySelector('.auth-tabs').hidden = true;
+  document.querySelector('label[for="email"]').hidden = true;
+  document.querySelector('#email').hidden = true;
+  document.querySelector('label[for="password"]').hidden = true;
+  document.querySelector('#password').hidden = true;
+  document.querySelector('#email').required = false;
+  document.querySelector('#password').required = false;
+  document.querySelector('#forgot-password').hidden = true;
+  document.querySelector('#mfa-login-group').hidden = true;
+  document.querySelector('#mfa-enroll-group').hidden = false;
+  document.querySelector('#mfa-enroll-code').required = true;
+  document.querySelector('#auth-title').textContent = 'Proteja sua conta.';
+  document.querySelector('.auth-intro').textContent = 'Ative um autenticador TOTP para continuar como administrador.';
+  submit.innerHTML = 'Ativar autenticador <span>→</span>';
+}
+
 function setMode(nextMode) {
   mode = nextMode;
   const signup = mode === 'signup';
@@ -39,13 +61,17 @@ function setMode(nextMode) {
   const passwordReset = mode === 'reset';
   const loginLike = mode === 'login';
   mfaRequired = false;
+  mfaEnrollmentRequired = false;
+  enrollmentFactorId = '';
   document.querySelector('label[for="email"]').hidden = false;
   document.querySelector('#email').hidden = false;
   document.querySelector('#email').required = true;
   document.querySelector('#password').hidden = recoveryRequest;
   document.querySelector('label[for="password"]').hidden = recoveryRequest;
   document.querySelector('#mfa-login-group').hidden = true;
+  document.querySelector('#mfa-enroll-group').hidden = true;
   document.querySelector('#mfa-login-code').required = false;
+  document.querySelector('#mfa-enroll-code').required = false;
   document.querySelector('#password').required = !recoveryRequest;
   loginTab.classList.toggle('active', !signup);
   signupTab.classList.toggle('active', signup);
@@ -73,6 +99,32 @@ document.querySelector('#mfa-cancel').addEventListener('click', async () => {
   location.replace('/entrar.html');
 });
 
+document.querySelector('#mfa-cancel-enrollment').addEventListener('click', async () => {
+  await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin',
+    headers: { 'content-type': 'application/json' }, body: '{}' }).catch(() => {});
+  location.replace('/entrar.html');
+});
+
+document.querySelector('#mfa-enroll-start').addEventListener('click', async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  message.textContent = '';
+  try {
+    const result = await fetch('/api/auth/mfa/enroll', { method: 'POST', credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Nivel Creator AI Admin' }) });
+    const data = await result.json();
+    if (!result.ok) throw new Error(data.error || 'Não foi possível iniciar a configuração.');
+    enrollmentFactorId = data.factor.id;
+    document.querySelector('#mfa-enroll-qr').src = data.factor.qr_code;
+    document.querySelector('#mfa-enroll-secret').textContent = data.factor.secret;
+    document.querySelector('#mfa-enroll-details').hidden = false;
+    document.querySelector('#mfa-enroll-code').focus();
+  } catch (error) {
+    message.textContent = error.message || 'Não foi possível iniciar a configuração.';
+    button.disabled = false;
+  }
+});
+
 const query = new URLSearchParams(location.search);
 if (query.has('verificado')) message.textContent = 'E-mail confirmado. Agora entre com sua senha.';
 if (query.has('redefinir')) setMode('reset');
@@ -92,7 +144,8 @@ fetch('/api/auth/status', { credentials: 'same-origin' }).then(async (result) =>
     fetch('/api/auth/mfa/status', { credentials: 'same-origin' }).then(async (result) => {
       if (!result.ok) return;
       const mfa = await result.json();
-      if (mfa.required || query.has('mfa')) showMfaLogin(mfa.factors);
+      if (mfa.enroll_required) showMfaEnrollment();
+      else if (mfa.required) showMfaLogin(mfa.factors);
     }).catch(() => {});
   }
 }).catch(() => {
@@ -109,6 +162,20 @@ form.addEventListener('submit', async (event) => {
   submit.disabled = true;
     submit.textContent = mode === 'signup' ? 'Criando sua conta…' : mode === 'recover' ? 'Enviando…' : mode === 'reset' ? 'Atualizando…' : 'Verificando…';
   try {
+    if (mfaEnrollmentRequired) {
+      if (!enrollmentFactorId) throw new Error('Gere o QR code antes de informar o código.');
+      const result = await fetch('/api/auth/mfa/verify-enrollment', { method: 'POST', credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' }, body: JSON.stringify({
+          factor_id: enrollmentFactorId,
+          code: document.querySelector('#mfa-enroll-code').value.trim()
+        }) });
+      const data = await result.json();
+      if (!result.ok) throw new Error(data.error || 'Não foi possível validar o código.');
+      const requestedPath = query.get('redirect') || '/';
+      const destination = requestedPath.startsWith('/') && !requestedPath.startsWith('//') ? requestedPath : '/';
+      location.assign(destination);
+      return;
+    }
     if (mfaRequired) {
       const result = await fetch('/api/auth/mfa/verify-login', { method: 'POST', credentials: 'same-origin',
         headers: { 'content-type': 'application/json' }, body: JSON.stringify({
@@ -145,6 +212,10 @@ form.addEventListener('submit', async (event) => {
     });
     const data = await result.json();
     if (!result.ok) throw new Error(data.error || 'Não foi possível concluir. Tente novamente.');
+    if (mode === 'login' && data.mfa_setup_required) {
+      showMfaEnrollment();
+      return;
+    }
     if (mode === 'login' && data.mfa_required) {
       showMfaLogin(data.factors);
       return;
@@ -161,6 +232,6 @@ form.addEventListener('submit', async (event) => {
     message.textContent = error.message || 'Serviço indisponível. Tente novamente em instantes.';
   } finally {
     submit.disabled = !ready;
-    submit.innerHTML = mfaRequired ? 'Confirmar código <span>→</span>' : mode === 'signup' ? 'Criar minha conta <span>→</span>' : mode === 'recover' ? 'Enviar link de recuperação <span>→</span>' : mode === 'reset' ? 'Salvar nova senha <span>→</span>' : 'Entrar <span>→</span>';
+    submit.innerHTML = mfaEnrollmentRequired ? 'Ativar autenticador <span>→</span>' : mfaRequired ? 'Confirmar código <span>→</span>' : mode === 'signup' ? 'Criar minha conta <span>→</span>' : mode === 'recover' ? 'Enviar link de recuperação <span>→</span>' : mode === 'reset' ? 'Salvar nova senha <span>→</span>' : 'Entrar <span>→</span>';
   }
 });

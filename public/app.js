@@ -1157,8 +1157,12 @@ async function loadMfaSettings() {
     button.hidden = data.pending.length > 0 || data.factors.length >= 10;
     button.textContent = data.factors.length ? 'Adicionar outro autenticador TOTP' : 'Adicionar autenticador TOTP';
     note.textContent = data.enabled
-      ? 'A autenticação em duas etapas está ativa. Novas sessões precisam de um código de um dos seus aplicativos autenticadores.'
-      : 'Adicione um aplicativo autenticador TOTP para exigir um segundo fator nas próximas sessões.';
+      ? data.admin_mfa_required
+        ? 'MFA é obrigatório para administradores. Mantenha ao menos um autenticador ativo; novas sessões precisam de um código.'
+        : 'A autenticação em duas etapas está ativa. Novas sessões precisam de um código de um dos seus aplicativos autenticadores.'
+      : data.admin_mfa_required
+        ? 'MFA é obrigatório para administradores. Ative um autenticador para continuar usando as APIs privadas.'
+        : 'Adicione um aplicativo autenticador TOTP para exigir um segundo fator nas próximas sessões.';
     for (const factor of data.factors) {
       const row = document.createElement('div');
       row.className = 'mfa-factor-row';
@@ -1167,7 +1171,9 @@ async function loadMfaSettings() {
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'button button-outline';
-      remove.textContent = 'Remover';
+      const mustKeepFactor = data.admin_mfa_required && data.factors.length === 1;
+      remove.textContent = mustKeepFactor ? 'Obrigatório' : 'Remover';
+      remove.disabled = mustKeepFactor;
       remove.addEventListener('click', async () => {
         if (!window.confirm('Remover este autenticador? As próximas sessões não pedirão esse segundo fator.')) return;
         remove.disabled = true;
@@ -1380,7 +1386,7 @@ async function loadAccount() {
         return;
       }
       const data = await accountResult.json();
-      if (accountResult.status === 403 && data.code === 'mfa_required') {
+      if (accountResult.status === 403 && ['mfa_required', 'mfa_enrollment_required'].includes(data.code)) {
         location.replace('/entrar.html?mfa=1');
         return;
       }
