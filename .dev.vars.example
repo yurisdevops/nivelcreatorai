@@ -9,3 +9,10 @@ GEMINI_MODEL=gemini-3.8-flash
 # Optional Asaas Sandbox credentials; never use a production key with this implementation.
 ASAAS_API_KEY=
 ASAAS_WEBHOOK_TOKEN=
+# Instagram API with Instagram Login (Meta professional account).
+INSTAGRAM_APP_ID=
+INSTAGRAM_APP_SECRET=
+INSTAGRAM_REDIRECT_URI=http://localhost:8787/auth/instagram/callback
+META_GRAPH_API_VERSION=
+# Generate once with: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+INSTAGRAM_TOKEN_ENCRYPTION_KEY=

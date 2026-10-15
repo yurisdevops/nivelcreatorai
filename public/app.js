@@ -793,6 +793,78 @@ async function loadHomeDashboard() {
   } catch { /* Keep honest empty states if dashboard data is temporarily unavailable. */ }
 }
 
+async function loadInstagramConnection() {
+  try {
+    const result = await fetch('/api/instagram/status', { credentials: 'same-origin' });
+    if (result.status === 401) return;
+    const data = await result.json();
+    if (!result.ok) return;
+    const status = document.querySelector('#instagram-connection-status');
+    const connect = document.querySelector('#connect-instagram');
+    const disconnect = document.querySelector('#disconnect-instagram');
+    const consent = document.querySelector('#instagram-insights-consent');
+    connect.disabled = !data.configured;
+    connect.title = data.configured ? '' : 'O app da Meta ainda não foi configurado neste ambiente.';
+    disconnect.hidden = !data.connection;
+    consent.disabled = !data.configured;
+    if (!data.configured) {
+      status.textContent = 'A conexão estará disponível após configurar o app da Meta e a chave de criptografia.';
+    } else if (data.connection?.status === 'connected') {
+      const expires = data.connection.expires_at
+        ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(data.connection.expires_at))
+        : 'validade não informada';
+      const synced = data.connection.last_sync_at
+        ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(data.connection.last_sync_at))
+        : 'primeira coleta agendada';
+      const issue = data.connection.last_error === 'sync_failed'
+        ? ' A última coleta falhou; uma nova tentativa será feita mais tarde.'
+        : data.connection.last_error === 'insights_unavailable'
+          ? ' A Meta não retornou algumas métricas; valores ausentes não são estimados.' : '';
+      status.textContent = `Conectado como @${data.connection.username} · última coleta: ${synced} · token válido até ${expires}.${issue}`;
+    } else if (data.connection?.status === 'expired') {
+      status.textContent = `A conexão de @${data.connection.username} expirou. Reconecte a conta para voltar a consultar insights.`;
+      connect.textContent = 'Reconectar Instagram ↗';
+    } else {
+      status.textContent = 'A conexão precisa ser renovada. Reconecte sua conta profissional.';
+      connect.textContent = 'Reconectar Instagram ↗';
+    }
+  } catch { /* Keep the dashboard usable if the connection status is temporarily unavailable. */ }
+}
+
+document.querySelector('#connect-instagram').addEventListener('click', async (event) => {
+  if (!document.querySelector('#instagram-insights-consent').checked) {
+    announce('Confirme a autorização para ler dados básicos e insights do Instagram.');
+    return;
+  }
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    const result = await fetch('/api/instagram/connect', { method: 'POST', credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify({ consent: true }) });
+    const data = await result.json();
+    if (result.status === 401) { location.href = '/entrar.html?redirect=%2F'; return; }
+    if (!result.ok) throw new Error(data.error || 'Não foi possível iniciar a conexão.');
+    location.assign(data.authorize_url);
+  } catch (error) { announce(error.message || 'Não foi possível iniciar a conexão.'); }
+  finally { button.disabled = false; }
+});
+
+document.querySelector('#disconnect-instagram').addEventListener('click', async (event) => {
+  if (!window.confirm('Desconectar o Instagram e apagar o token salvo neste workspace? As métricas históricas permanecem. Para revogar o acesso na Meta, remova o app nas configurações do Instagram.')) return;
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    const result = await fetch('/api/instagram/disconnect', { method: 'POST', credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify({ confirm: true }) });
+    const data = await result.json();
+    if (result.status === 401) { location.href = '/entrar.html?redirect=%2F'; return; }
+    if (!result.ok) throw new Error(data.error || 'Não foi possível desconectar a conta.');
+    await loadInstagramConnection();
+    announce('Instagram desconectado. O token local foi removido.');
+  } catch (error) { announce(error.message || 'Não foi possível desconectar a conta.'); }
+  finally { button.disabled = false; }
+});
+
 async function loadSettings() {
   try {
     const result = await fetch('/api/me', { credentials: 'same-origin' });
@@ -1012,6 +1084,7 @@ async function loadAccount() {
         openOnboarding();
       }
       await loadHomeDashboard();
+      await loadInstagramConnection();
       await loadNotifications();
       return;
     }
@@ -1027,6 +1100,10 @@ const paymentReturn = new URLSearchParams(location.search).get('pagamento');
 if (paymentReturn === 'aguardando-webhook') announce('Checkout concluído. O Asaas está confirmando o pagamento; o acesso muda após o webhook.');
 if (paymentReturn === 'cancelado') announce('Checkout cancelado. Sua assinatura ainda não foi ativada.');
 if (paymentReturn === 'expirado') announce('Checkout expirado. Você pode iniciar outro nas configurações.');
+const instagramReturn = new URLSearchParams(location.search).get('instagram');
+if (instagramReturn === 'conectado') announce('Instagram conectado. A sincronização de insights depende das permissões aprovadas pela Meta.');
+if (instagramReturn === 'cancelado') announce('Conexão cancelada. Nenhum token foi salvo.');
+if (instagramReturn === 'erro') announce('Não foi possível conectar. Confira se a conta é profissional e tente novamente.');
 
 document.querySelector('#logout').addEventListener('click', async () => {
   try {

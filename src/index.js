@@ -14,6 +14,7 @@ import { dashboardHandler } from "./dashboard.js";
 import { notificationCronHandler, notificationHandler } from "./notifications.js";
 import { accountDataHandler, processDeletionQueue } from "./account_data.js";
 import { billingHandler, processAsaasQueue, receiveAsaasWebhook } from "./billing.js";
+import { instagramCallback, instagramHandler, refreshInstagramTokens, syncInstagramInsights } from "./instagram.js";
 
 const securityHeaders = {
   "content-security-policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'",
@@ -183,6 +184,7 @@ export default {
       if (auth) return auth;
 
       if (url.pathname === "/auth/callback") return await callbackHandler(request, env);
+      if (url.pathname === "/auth/instagram/callback") return await instagramCallback(request, env);
 
       const account = await accountHandler(request, env, url.pathname);
       if (account) return account;
@@ -207,6 +209,15 @@ export default {
         const workspace = await getWorkspace(env, user.id);
         if (!workspace) throw new AuthError(404, "Seu espaço não foi encontrado.");
         const result = await billingHandler(request, env, url.pathname, workspace);
+        if (result) return response(result, 200, cookies);
+      }
+
+      if (url.pathname.startsWith("/api/instagram/")) {
+        if (!isProviderConfigured(env)) throw new AuthError(503, "Configure Supabase Auth e D1 para acessar sua conexão do Instagram.");
+        const { user, cookies } = await requireUser(request, env);
+        const workspace = await getWorkspace(env, user.id);
+        if (!workspace) throw new AuthError(404, "Seu espaço não foi encontrado.");
+        const result = await instagramHandler(request, env, url.pathname, workspace);
         if (result) return response(result, 200, cookies);
       }
 
@@ -266,6 +277,7 @@ export default {
     }
   },
   async scheduled(_event, env, ctx) {
-    ctx.waitUntil(Promise.all([notificationCronHandler(env), processDeletionQueue(env), processAsaasQueue(env)]));
+    ctx.waitUntil(Promise.all([notificationCronHandler(env), processDeletionQueue(env), processAsaasQueue(env),
+      refreshInstagramTokens(env), syncInstagramInsights(env)]));
   }
 };

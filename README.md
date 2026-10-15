@@ -15,6 +15,8 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 - Reserva de quota por ciclo antes da chamada de IA (10 roteiros no trial e 60 por ciclo pago); falhas liberam a reserva e roteiros persistidos consomem a quota.
 - Lista de roteiros privada por workspace, com limite de consulta e sem credenciais de IA expostas ao navegador.
 - Diagnóstico com quota (2 no trial, 8 no pago), que exige métricas com fonte e período e não inventa score quando os dados não existem.
+- Conexão de conta profissional pelo Instagram Login da Meta, state OAuth de uso único, consentimento de insights separado do consentimento de IA, token AES-GCM vinculado ao workspace e renovação preventiva.
+- Captura diária de alcance, visualizações, interações, visitas ao perfil e seguidores pela API oficial; métricas não retornadas para uma conta ou permissão ficam marcadas como indisponíveis.
 - Planejamento editorial semanal via Gemini, histórico privado, sugestões revisáveis, envio idempotente da pauta ao calendário e quota de 1 plano no trial e 4 por ciclo pago.
 - Calendário privado com fluxo de conteúdo em etapas e campanhas UGC para registrar marcas, entregáveis, prazos e status.
 - Agente pessoal com histórico por workspace e quota (30 mensagens no trial, 200 no pago); conteúdo de conversa não autoriza ações externas.
@@ -28,7 +30,7 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 
 1. Instale Node.js e, nesta pasta, rode `npm install`.
 2. Crie um projeto Supabase exclusivo para o Nivel Creator AI. Ative confirmação de e-mail e adicione `http://localhost:8787/auth/callback` às URLs de redirecionamento permitidas.
-3. Copie `.dev.vars.example` para `.dev.vars` e preencha `SUPABASE_URL`, `SUPABASE_ANON_KEY` e `GEMINI_API_KEY` com credenciais próprias. Para testar cobrança, preencha também a chave Asaas Sandbox e o token de autenticação configurado no webhook. Nunca coloque credenciais de serviço no navegador nem versionadas no Git.
+3. Copie `.dev.vars.example` para `.dev.vars` e preencha `SUPABASE_URL`, `SUPABASE_ANON_KEY` e `GEMINI_API_KEY` com credenciais próprias. Nunca coloque credenciais de serviço no navegador nem versionadas no Git.
 4. Crie uma base D1 exclusiva: `npx wrangler d1 create nivel-creator`. Substitua `replace-with-your-d1-database-id` em `wrangler.jsonc` pelo `database_id` retornado.
 5. Aplique o esquema local: `npm run db:local`.
 6. Rode `npm run dev` e abra `http://localhost:8787`.
@@ -36,6 +38,10 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 Para produção, configure a URL de callback do domínio final no Supabase, defina `SUPABASE_URL` e `SUPABASE_ANON_KEY` como secrets do Worker e aplique as migrações remotas conscientemente com `npx wrangler d1 migrations apply nivel-creator --remote`.
 
 Para habilitar exclusão automática da conta, configure `SUPABASE_SECRET_KEY` como secret do Worker (`npx wrangler secret put SUPABASE_SECRET_KEY`). A chave é usada somente pelo Worker para chamar a operação administrativa de exclusão no Supabase Auth. Em desenvolvimento, a variável pode ser preenchida no `.dev.vars` local, que é ignorado pelo Git.
+
+Para habilitar a conexão com Instagram, crie um app Meta com Instagram Login para contas profissionais e configure no Worker `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `INSTAGRAM_REDIRECT_URI`, `META_GRAPH_API_VERSION` e `INSTAGRAM_TOKEN_ENCRYPTION_KEY`. Cadastre exatamente a callback `/auth/instagram/callback` na configuração de OAuth do app. Gere a chave uma vez com `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`; mantenha-a em Workers Secrets em produção e faça backup seguro, pois perdê-la impede a leitura dos tokens já criptografados. Solicite as permissões `instagram_business_basic` e `instagram_business_manage_insights`; o acesso de creators externos requer modo Live e a análise de permissões da Meta. A sincronização roda pelo Cron depois da conexão.
+
+Para testar cobrança em sandbox, preencha também `ASAAS_API_KEY` e `ASAAS_WEBHOOK_TOKEN`, e configure `/webhooks/asaas` no painel Asaas com o mesmo token.
 
 O template de confirmação do Supabase deve enviar o link para `/auth/callback` com `token_hash` e `type=email`. O template de recuperação usa o mesmo callback com `type=recovery`. A rota valida o token no provedor e só então cria os cookies da sessão.
 
@@ -45,7 +51,7 @@ Supabase recomenda validar JWTs com `getClaims` ou validar o token no Auth serve
 
 ## Próximas etapas do produto
 
-- OAuth e permissões revisadas para Instagram profissional, armazenamento criptografado de tokens e importação de métricas permitidas; até lá, métricas e diagnósticos exibem estados sem dados.
+- Revisar e aprovar o app Meta, validar a conexão e a compatibilidade das métricas na conta sandbox/desenvolvedor; a implementação depende dessas permissões e não publica conteúdo.
 - Aprovisionar e configurar os recursos reais de Supabase, D1 e Gemini para o ambiente de beta.
 - E-mail transacional para notificações continua desativado até configurar um provedor e preferências de envio.
 - Arquivos privados via R2 com limites, verificação de conteúdo e URLs curtas.

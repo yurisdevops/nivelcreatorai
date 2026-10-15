@@ -16,7 +16,8 @@ async function exportWorkspace(env, account) {
       FROM creator_profiles WHERE workspace_id=?1`).bind(id).first(),
     db.prepare("SELECT starts_at, ends_at, status FROM trials WHERE workspace_id=?1").bind(id).first(),
     db.prepare(`SELECT status, period_start, period_end, cancel_at_period_end FROM subscriptions WHERE workspace_id=?1`).bind(id).first(),
-    db.prepare(`SELECT meta_account_id, expires_at, status, created_at FROM instagram_connections WHERE workspace_id=?1`).bind(id).first(),
+    db.prepare(`SELECT meta_account_id, username, account_type, expires_at, status, consent_at, consent_version, last_sync_at, last_error, created_at
+      FROM instagram_connections WHERE workspace_id=?1`).bind(id).first(),
     db.prepare(`SELECT metric, period_start, period_end, value, source, fetched_at, availability FROM metric_snapshots
       WHERE workspace_id=?1 ORDER BY fetched_at DESC LIMIT 5000`).bind(id).all(),
     db.prepare(`SELECT id, version, status, content_json, created_at, updated_at FROM scripts
