@@ -1118,10 +1118,18 @@ async function loadInstagramConnection() {
       onboardingConnect.textContent = 'Conectar Instagram ↗';
       connect.textContent = 'Conectar Instagram ↗';
     } else {
-      status.textContent = 'A conexão precisa ser renovada. Reconecte sua conta profissional.';
-      onboardingStatus.textContent = 'Nenhuma conta conectada. A conexão é opcional e pode ser feita depois.';
+      const permissionIssue = data.connection.last_error === 'insufficient_permissions';
+      const tokenIssue = ['token_invalid', 'token_expired'].includes(data.connection.last_error) || data.connection.status === 'revoked';
+      status.textContent = permissionIssue
+        ? 'A Meta não liberou as permissões necessárias para os insights. Revise as permissões do app e reconecte a conta.'
+        : tokenIssue
+          ? 'O acesso do Instagram foi revogado ou expirou. Reconecte sua conta para voltar a consultar insights.'
+          : 'A conexão precisa ser renovada. Reconecte sua conta profissional.';
+      onboardingStatus.textContent = permissionIssue
+        ? 'As permissões para insights precisam ser revisadas. Você pode reconectar ou continuar sem métricas.'
+        : 'A conexão precisa ser renovada. Você pode reconectar ou continuar sem métricas.';
       onboardingConnect.disabled = false;
-      onboardingConnect.textContent = 'Conectar Instagram ↗';
+      onboardingConnect.textContent = 'Reconectar Instagram ↗';
       connect.textContent = 'Reconectar Instagram ↗';
     }
   } catch {

@@ -22,7 +22,8 @@ function callbackUrl(env, request) {
   const localHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
   if ((configuredUrl.protocol !== "https:" && !localHosts.has(configuredUrl.hostname)) ||
       configuredUrl.username || configuredUrl.password || configuredUrl.search || configuredUrl.hash ||
-      requestUrl.origin !== configuredUrl.origin || requestUrl.pathname !== "/auth/instagram/callback" ||
+      requestUrl.origin !== configuredUrl.origin ||
+      !["/api/instagram/connect", "/auth/instagram/callback"].includes(requestUrl.pathname) ||
       configuredUrl.pathname !== "/auth/instagram/callback") {
     throw new AuthError(503, "A URL de retorno do Instagram não corresponde a este ambiente.");
   }
@@ -74,9 +75,15 @@ async function sha256(value) {
 
 async function fetchJson(url, options = {}) {
   const response = await fetch(url, { ...options, redirect: "error", signal: AbortSignal.timeout(12000) });
-  if (!response.ok) throw new Error("provider_error");
-  const value = await response.json();
-  if (!value || typeof value !== "object" || value.error) throw new Error("provider_error");
+  let value;
+  try { value = await response.json(); } catch { value = null; }
+  if (!response.ok || !value || typeof value !== "object" || value.error) {
+    const error = new Error("provider_error");
+    const graphCode = Number(value?.error?.code);
+    if (response.status === 401 || [102, 190].includes(graphCode)) error.code = "instagram_token_invalid";
+    else if (response.status === 403 || [10, 200].includes(graphCode)) error.code = "instagram_permission_denied";
+    throw error;
+  }
   return value;
 }
 
@@ -242,10 +249,18 @@ export async function refreshInstagramTokens(env) {
         ? new Date(Date.now() + Number(refreshed.expires_in) * 1000).toISOString() : connection.expires_at;
       await env.DB.prepare(`UPDATE instagram_connections SET encrypted_token=?1, expires_at=?2, status='connected', last_error=NULL
         WHERE workspace_id=?3 AND status='connected'`).bind(encrypted, expiresAt, connection.workspace_id).run();
-    } catch {
+    } catch (error) {
       const expired = Date.parse(connection.expires_at) <= Date.now();
-      if (expired) await env.DB.prepare("UPDATE instagram_connections SET status='expired' WHERE workspace_id=?1 AND status='connected'")
-        .bind(connection.workspace_id).run();
+      if (error?.code === "instagram_token_invalid") {
+        await env.DB.prepare(`UPDATE instagram_connections SET status='revoked', last_error='token_invalid'
+          WHERE workspace_id=?1 AND status='connected'`).bind(connection.workspace_id).run();
+      } else if (error?.code === "instagram_permission_denied") {
+        await env.DB.prepare(`UPDATE instagram_connections SET status='error', last_error='insufficient_permissions'
+          WHERE workspace_id=?1 AND status='connected'`).bind(connection.workspace_id).run();
+      } else if (expired) {
+        await env.DB.prepare(`UPDATE instagram_connections SET status='expired', last_error='token_expired'
+          WHERE workspace_id=?1 AND status='connected'`).bind(connection.workspace_id).run();
+      }
     }
   }
 }
@@ -290,22 +305,47 @@ export async function syncInstagramInsights(env) {
       const endDate = now.toISOString().slice(0, 10);
       let insights = new Map();
       let insightError = false;
+      let permissionError = false;
       try {
         insights = await requestInsights(env, connection.meta_account_id, token,
           ["reach", "views", "total_interactions"], "day", since, until, "total_value");
-      } catch { insightError = true; }
+      } catch (error) {
+        if (error?.code === "instagram_token_invalid") {
+          await env.DB.prepare(`UPDATE instagram_connections SET status='revoked', last_error='token_invalid'
+            WHERE workspace_id=?1 AND status='connected'`).bind(connection.workspace_id).run();
+          continue;
+        }
+        insightError = true;
+        permissionError ||= error?.code === "instagram_permission_denied";
+      }
       let followers = null;
       try {
         const followerInsights = await requestInsights(env, connection.meta_account_id, token,
           ["follower_count"], "lifetime", null, null, null);
         followers = metricNumber(followerInsights.get("follower_count"), true);
-      } catch { /* Follower count may be unavailable for accounts below Meta's privacy threshold. */ }
+      } catch (error) {
+        if (error?.code === "instagram_token_invalid") {
+          await env.DB.prepare(`UPDATE instagram_connections SET status='revoked', last_error='token_invalid'
+            WHERE workspace_id=?1 AND status='connected'`).bind(connection.workspace_id).run();
+          continue;
+        }
+        permissionError ||= error?.code === "instagram_permission_denied";
+        /* Follower count may be unavailable for accounts below Meta's privacy threshold. */
+      }
       let profileVisits = null;
       try {
         const profileInsights = await requestInsights(env, connection.meta_account_id, token,
           ["profile_views"], "day", since, until, "total_value");
         profileVisits = metricNumber(profileInsights.get("profile_views"));
-      } catch { /* Some API versions or account permissions may not provide this metric. */ }
+      } catch (error) {
+        if (error?.code === "instagram_token_invalid") {
+          await env.DB.prepare(`UPDATE instagram_connections SET status='revoked', last_error='token_invalid'
+            WHERE workspace_id=?1 AND status='connected'`).bind(connection.workspace_id).run();
+          continue;
+        }
+        permissionError ||= error?.code === "instagram_permission_denied";
+        /* Some API versions or account permissions may not provide this metric. */
+      }
 
       const mapping = [
         { key: "reach", api: "reach" },
@@ -323,13 +363,15 @@ export async function syncInstagramInsights(env) {
           VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'Instagram API (Login profissional)', ?7, ?8)
           ON CONFLICT(workspace_id, metric, period_start, period_end, source) DO UPDATE SET
             value=excluded.value, fetched_at=excluded.fetched_at, availability=excluded.availability`)
-          .bind(crypto.randomUUID(), connection.workspace_id, key, periodStart, periodEnd, value, now.toISOString(), availability);
+          .bind(crypto.randomUUID(), connection.workspace_id, key, periodStart, endDate, value, now.toISOString(), availability);
       });
-      statements.push(env.DB.prepare(`UPDATE instagram_connections SET last_sync_at=?1, last_error=?2
-        WHERE workspace_id=?3 AND status='connected'`)
-        .bind(now.toISOString(), insightError ? "insights_unavailable" : null, connection.workspace_id));
+      statements.push(env.DB.prepare(`UPDATE instagram_connections SET last_sync_at=?1, last_error=?2,
+        status=CASE WHEN ?3=1 THEN 'error' ELSE status END
+        WHERE workspace_id=?4 AND status='connected'`)
+        .bind(now.toISOString(), permissionError ? "insufficient_permissions" : insightError ? "insights_unavailable" : null,
+          permissionError ? 1 : 0, connection.workspace_id));
       await env.DB.batch(statements);
-    } catch {
+    } catch (error) {
       // Never persist provider response bodies, access tokens, or profile data in an error log.
       await env.DB.prepare(`UPDATE instagram_connections SET last_error='sync_failed'
         WHERE workspace_id=?1 AND status='connected'`).bind(connection.workspace_id).run();
