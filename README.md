@@ -75,7 +75,7 @@ Supabase recomenda validar JWTs com `getClaims` ou validar o token no Auth serve
 
 O procedimento operacional atual para backup e recuperação de D1/R2 está em [`docs/backup-and-restore.md`](docs/backup-and-restore.md). A documentação não significa que a infraestrutura remota já foi configurada nem que uma restauração real foi validada.
 
-Não existe conexão com a conta Asaas ou Nivel Studio, OAuth do Instagram, publicação automática ou provisionamento de infraestrutura remota por este código. As migrações ainda não foram aplicadas.
+O fluxo de OAuth do Instagram está implementado, mas o app Meta ainda não foi aprovado nem conectado a uma conta real. Não há conexão com a conta Asaas ou Nivel Studio e o produto não publica conteúdo automaticamente. A infraestrutura remota ainda não foi provisionada; as migrações foram aplicadas somente ao D1 local.
 
 Os namespaces `2026101501`, `2026101502` e `2026101503` dos rate limiters precisam ser exclusivos nesta conta Cloudflare; altere-os se já estiverem em uso por outro Worker. Os limites são contadores rápidos por localização, conforme a API do Cloudflare, e as quotas transacionais no D1 continuam sendo o controle de consumo por ciclo. O terceiro namespace limita tentativas de MFA; o Supabase Auth também aplica seus limites próprios.
 
