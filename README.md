@@ -37,7 +37,7 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 ## Desenvolvimento local
 
 1. Instale Node.js 22 ou superior e, nesta pasta, rode `npm install`.
-2. Crie um projeto Supabase exclusivo para o Nivel Creator AI. Ative confirmação de e-mail e adicione `http://localhost:8787/auth/callback` às URLs de redirecionamento permitidas. Em Authentication → MFA, habilite TOTP e permita verificação de fatores; creators podem ativar em Configurações → Segurança da conta. Um usuário cujo papel em `memberships` seja `admin` será encaminhado para cadastrar TOTP no próximo login.
+2. O projeto Supabase exclusivo `Nivel Creator AI` já foi criado na organização `gruponivel`, região South America (São Paulo) e plano Free. A URL é `https://lonfsobzzwmzyqjdgrjx.supabase.co`. A configuração do Auth ainda está pendente: ative confirmação de e-mail, adicione `http://localhost:8787/auth/callback` às URLs de redirecionamento permitidas e, em Authentication → MFA, habilite TOTP e permita verificação de fatores. Creators podem ativar MFA em Configurações → Segurança da conta. Um usuário cujo papel em `memberships` seja `admin` será encaminhado para cadastrar TOTP no próximo login.
 3. Copie `.dev.vars.example` para `.dev.vars` e preencha `SUPABASE_URL`, `SUPABASE_ANON_KEY` e `GEMINI_API_KEY` com credenciais próprias. Nunca coloque credenciais de serviço no navegador nem versionadas no Git.
 4. A base D1 remota exclusiva `nivel-creator` e o bucket R2 privado `nivel-creator-private` já foram provisionados para este projeto; o `database_id` está registrado em `wrangler.jsonc`. As 15 migrações foram aplicadas à D1 remota. Para desenvolvimento local, rode `npm run db:local`.
 5. Aplique o esquema local: `npm run db:local` (inclui o controle global diário de IA).
@@ -70,7 +70,7 @@ Supabase recomenda validar JWTs com `getClaims` ou validar o token no Auth serve
 ## Próximas etapas do produto
 
 - Revisar e aprovar o app Meta, validar a conexão e a compatibilidade das métricas na conta sandbox/desenvolvedor; a implementação depende dessas permissões e não publica conteúdo.
-- Aprovisionar e configurar os recursos reais de Supabase, D1 e Gemini para o ambiente de beta.
+- Concluir a configuração do Auth no projeto Supabase provisionado e adicionar as credenciais localmente; configurar a chave do Gemini para o ambiente de beta.
 - E-mail transacional de lembretes usa o binding Cloudflare Email Service e só envia após opt-in. Configure `EMAIL_FROM_ADDRESS`/`EMAIL_FROM_NAME`, habilite um domínio de envio na conta Cloudflare e aplique a migração `0014_transactional_notification_email.sql`. O Email Sending está em beta e requer Workers Paid.
 - Política operacional de retenção dos objetos R2.
 - Asaas: conectar e validar conta sandbox e avaliar Pix Automático. O Pix disponível é avulso e precisa ser pago novamente a cada ciclo.
@@ -79,7 +79,7 @@ Supabase recomenda validar JWTs com `getClaims` ou validar o token no Auth serve
 
 O procedimento operacional atual para backup e recuperação de D1/R2 está em [`docs/backup-and-restore.md`](docs/backup-and-restore.md). A D1 e o R2 exclusivos do Nivel Creator AI já existem na Cloudflare e as 15 migrações foram verificadas; o Worker, o scanner e a restauração real ainda não foram validados.
 
-O fluxo de OAuth do Instagram está implementado, mas o app Meta ainda não foi aprovado nem conectado a uma conta real. Não há conexão com a conta Asaas ou Nivel Studio e o produto não publica conteúdo automaticamente. A conexão Supabase disponível lista zero projetos; o projeto exclusivo do Nivel Creator AI e suas credenciais ainda não estão configurados. As migrações estão aplicadas ao D1 local e ao D1 remoto exclusivo.
+O fluxo de OAuth do Instagram está implementado, mas o app Meta ainda não foi aprovado nem conectado a uma conta real. Não há conexão com a conta Asaas ou Nivel Studio e o produto não publica conteúdo automaticamente. O projeto exclusivo do Supabase foi criado, mas as configurações de Auth e as credenciais do Worker ainda não foram concluídas. A D1 e o bucket R2 exclusivos estão provisionados e as 15 migrações estão aplicadas à D1 local e à D1 remota.
 
 Os namespaces `2026101501`, `2026101502` e `2026101503` dos rate limiters precisam ser exclusivos nesta conta Cloudflare; altere-os se já estiverem em uso por outro Worker. Os limites são contadores rápidos por localização, conforme a API do Cloudflare, e as quotas transacionais no D1 continuam sendo o controle de consumo por ciclo. O terceiro namespace limita tentativas de MFA; o Supabase Auth também aplica seus limites próprios.
 
