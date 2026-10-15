@@ -20,3 +20,6 @@ INSTAGRAM_REDIRECT_URI=http://localhost:8787/auth/instagram/callback
 META_GRAPH_API_VERSION=
 # Generate once with: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 INSTAGRAM_TOKEN_ENCRYPTION_KEY=
+# Cloudflare Email Service transactional sender; the sending domain must be onboarded first.
+EMAIL_FROM_ADDRESS=
+EMAIL_FROM_NAME=Nivel Creator AI

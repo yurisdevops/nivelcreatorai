@@ -63,7 +63,7 @@ Supabase recomenda validar JWTs com `getClaims` ou validar o token no Auth serve
 
 - Revisar e aprovar o app Meta, validar a conexão e a compatibilidade das métricas na conta sandbox/desenvolvedor; a implementação depende dessas permissões e não publica conteúdo.
 - Aprovisionar e configurar os recursos reais de Supabase, D1 e Gemini para o ambiente de beta.
-- E-mail transacional para notificações continua desativado até configurar um provedor e preferências de envio.
+- E-mail transacional de lembretes usa o binding Cloudflare Email Service e só envia após opt-in. Configure `EMAIL_FROM_ADDRESS`/`EMAIL_FROM_NAME`, habilite um domínio de envio na conta Cloudflare e aplique a migração `0014_transactional_notification_email.sql`. O Email Sending está em beta e requer Workers Paid.
 - Varredura antimalware e política operacional de retenção dos objetos R2.
 - Asaas: conectar e validar conta sandbox e avaliar Pix Automático. O Pix disponível é avulso e precisa ser pago novamente a cada ciclo.
 - Aprovação jurídica da política de retenção, backups restauráveis e observabilidade operacional. Os rate limits do Worker são distribuídos por localização Cloudflare e permissivos; não substituem o teto global diário nem servem como contabilidade exata.
@@ -80,5 +80,7 @@ Creators podem cadastrar mais de um autenticador TOTP para reduzir o risco de pe
 `AI_DAILY_BUDGET_USD` define o teto global em dólares por dia UTC. `GEMINI_INPUT_USD_PER_MILLION` e `GEMINI_OUTPUT_USD_PER_MILLION` devem refletir o maior preço aplicável ao modelo e nível de serviço configurados; os padrões usam os preços de texto padrão do Gemini 3.8 Flash previstos para 2027, acima dos valores promocionais vigentes até 31/12/2026. Atualize os preços quando o provedor mudar sua tabela. O limite é estimado pelo uso de tokens retornado pelo Gemini; confira a fatura do provedor antes de produção. Reservas de chamadas interrompidas sem metadados mantêm o teto reservado até o fim do dia UTC.
 
 A migração `0010_workspace_retention.sql` adiciona a fila e os bloqueios de retenção. `0011_global_ai_budget.sql` cria o ledger atômico do teto diário e `0012_gemini_circuit_breaker.sql` adiciona o circuit breaker do provedor. `DATA_RETENTION_ENABLED` vem como `false`; só altere para `true` após aprovar a política de privacidade e confirmar a cobertura de retenção legal. A rotina exige D1, Supabase Auth administrativo e o bucket R2 configurados. Retenções legais podem ser registradas por operações em `workspace_retention_holds`; não existe endpoint público para criar ou remover esses bloqueios.
+
+A migração `0014_transactional_notification_email.sql` adiciona entrega idempotente com lease e retry limitado para lembretes transacionais do trial. A opção por e-mail fica desabilitada até que o binding e um remetente válido sejam configurados; ela não envia campanhas nem conteúdo de criação.
 
 Para idempotência, o Asaas mantém o identificador, hash e horário do evento; os payloads operacionais e o conteúdo da fila são apagados 30 dias após o processamento concluído ou falho.

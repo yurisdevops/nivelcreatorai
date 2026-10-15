@@ -74,6 +74,12 @@ async function loadNotifications() {
     const data = await result.json();
     renderNotifications(data.notifications, data.unread_count);
     document.querySelector('#notification-enabled').checked = data.preferences.in_app_enabled;
+    const emailToggle = document.querySelector('#notification-email-enabled');
+    emailToggle.checked = data.preferences.email_enabled;
+    emailToggle.disabled = !data.preferences.email_available;
+    document.querySelector('#notification-email-note').textContent = data.preferences.email_available
+      ? 'Lembretes sobre o período de teste.'
+      : 'E-mail indisponível até configurar o envio neste ambiente.';
   } catch { /* Notifications are optional when the service is unavailable. */ }
 }
 
@@ -111,6 +117,22 @@ document.querySelector('#notification-enabled').addEventListener('change', async
     const data = await result.json();
     if (!result.ok) throw new Error(data.error || 'Não foi possível salvar sua preferência.');
     announce(enabled ? 'Notificações internas ativadas.' : 'Notificações internas pausadas.');
+  } catch (error) {
+    event.currentTarget.checked = !enabled;
+    announce(error.message || 'Não foi possível salvar sua preferência.');
+  }
+});
+
+document.querySelector('#notification-email-enabled').addEventListener('change', async (event) => {
+  const enabled = event.currentTarget.checked;
+  try {
+    const result = await fetch('/api/notifications/preferences', { method: 'PUT', credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify({
+        in_app_enabled: document.querySelector('#notification-enabled').checked, email_enabled: enabled
+      }) });
+    const data = await result.json();
+    if (!result.ok) throw new Error(data.error || 'Não foi possível salvar sua preferência.');
+    announce(enabled ? 'E-mails transacionais ativados.' : 'E-mails transacionais pausados.');
   } catch (error) {
     event.currentTarget.checked = !enabled;
     announce(error.message || 'Não foi possível salvar sua preferência.');
