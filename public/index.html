@@ -43,7 +43,7 @@
             <button class="button button-primary" data-open-onboarding><span>＋</span> Preparar meu espaço</button>
           </section>
 
-          <section class="setup-banner" aria-label="Configuração inicial">
+          <section class="setup-banner" id="setup-banner" aria-label="Configuração inicial">
             <div class="setup-icon">✦</div><div class="setup-copy"><b>Vamos deixar este espaço com a sua cara?</b><p>Conte seu nicho, seus objetivos e como você gosta de se comunicar.</p></div><button class="button button-dark" data-open-onboarding>Começar configuração <span>→</span></button>
           </section>
 
@@ -135,7 +135,41 @@
 
     <dialog class="onboarding-dialog" id="onboarding">
       <form method="dialog" class="dialog-top"><span class="dialog-logo">✦ Seu perfil de creator</span><button class="close-button" aria-label="Fechar">×</button></form>
-      <div class="dialog-content"><p class="eyebrow">PASSO 1 DE 4 · CONEXÃO</p><h2>Você pode começar sem Instagram.</h2><p>A integração profissional ainda não está configurada. Continue com seus dados e briefings manuais; métricas e diagnóstico só aparecem depois de uma conexão autorizada.</p><label for="niche">Qual é o seu nicho?</label><input id="niche" name="niche" maxlength="100" placeholder="Ex.: beleza, maternidade, gastronomia"><label for="goal">O que você quer alcançar agora?</label><select id="goal" name="goal"><option value="">Escolha um objetivo</option><option>Ter mais consistência</option><option>Apresentar meu trabalho para marcas</option><option>Fortalecer minha comunidade</option><option>Organizar minhas ideias</option></select><label for="voice">Como é a sua voz?</label><textarea id="voice" name="voice" maxlength="500" rows="3" placeholder="Ex.: direta, bem-humorada e acolhedora"></textarea><label class="consent-label"><input id="ai-consent" type="checkbox"> Autorizo o envio do meu perfil, das métricas autorizadas disponíveis e dos briefings que eu escolher ao Google Gemini para gerar respostas e roteiros. Posso retirar esta autorização aqui quando quiser.</label><div class="dialog-actions"><button type="button" class="button button-outline" id="cancel-onboarding">Agora não</button><button type="button" class="button button-primary" id="save-onboarding">Salvar perfil <span>→</span></button></div><small class="local-note">O consentimento de IA é opcional; sem ele, as áreas manuais permanecem disponíveis e a IA fica desativada.</small></div>
+      <div class="dialog-content">
+        <p class="eyebrow" id="onboarding-progress" aria-live="polite">PASSO 1 DE 4 · CONEXÃO</p>
+        <section class="onboarding-step" data-onboarding-step="0" aria-labelledby="onboarding-connect-title">
+          <h2 id="onboarding-connect-title">Conecte seu Instagram profissional</h2>
+          <p>Com autorização, o Nivel Creator pode consultar apenas os dados e insights liberados pela Meta. Você também pode continuar sem conectar e preencher seu perfil manualmente.</p>
+          <p id="onboarding-instagram-status" class="onboarding-connection-status" role="status">Verificando disponibilidade da conexão…</p>
+          <label class="consent-label"><input id="onboarding-instagram-consent" type="checkbox"> Autorizo a leitura de dados básicos e insights da minha conta profissional. Posso desconectar e revogar o acesso depois.</label>
+          <button type="button" class="button button-outline" id="onboarding-connect-instagram">Conectar Instagram <span>↗</span></button>
+          <small class="local-note">A conexão é opcional. Métricas e diagnóstico só ficam disponíveis quando a conta e as permissões da Meta permitem.</small>
+        </section>
+        <section class="onboarding-step" data-onboarding-step="1" aria-labelledby="onboarding-niche-title" hidden>
+          <h2 id="onboarding-niche-title">Confirme seu nicho</h2>
+          <p>Esse contexto ajuda a personalizar ideias. Você poderá editar essas informações a qualquer momento.</p>
+          <label for="niche">Qual é o seu nicho?</label><input id="niche" name="niche" maxlength="100" autocomplete="off" placeholder="Ex.: beleza, maternidade, gastronomia">
+        </section>
+        <section class="onboarding-step" data-onboarding-step="2" aria-labelledby="onboarding-goals-title" hidden>
+          <h2 id="onboarding-goals-title">Defina seu objetivo e seu tom</h2>
+          <p>As sugestões começam pelo que você quer alcançar e por como gosta de se comunicar.</p>
+          <label for="goal">O que você quer alcançar agora?</label><select id="goal" name="goal"><option value="">Escolha um objetivo</option><option>Ter mais consistência</option><option>Apresentar meu trabalho para marcas</option><option>Fortalecer minha comunidade</option><option>Organizar minhas ideias</option></select>
+          <label for="voice">Como é a sua voz?</label><textarea id="voice" name="voice" maxlength="500" rows="3" placeholder="Ex.: direta, bem-humorada e acolhedora"></textarea>
+        </section>
+        <section class="onboarding-step" data-onboarding-step="3" aria-labelledby="onboarding-consent-title" hidden>
+          <h2 id="onboarding-consent-title">Revise seu contexto e suas escolhas</h2>
+          <p id="onboarding-summary"></p>
+          <label class="consent-label"><input id="ai-consent" type="checkbox"> Autorizo o envio do meu perfil, das métricas autorizadas disponíveis e dos briefings que eu escolher ao Google Gemini para gerar respostas e roteiros. Posso retirar esta autorização nas configurações.</label>
+          <small class="local-note">O consentimento de IA é opcional; sem ele, as áreas manuais permanecem disponíveis e a IA fica desativada.</small>
+        </section>
+        <div class="dialog-actions onboarding-actions">
+          <button type="button" class="button button-outline" id="cancel-onboarding">Agora não</button>
+          <span class="onboarding-actions-spacer"></span>
+          <button type="button" class="button button-outline" id="back-onboarding" hidden>Voltar</button>
+          <button type="button" class="button button-primary" id="next-onboarding">Continuar <span>→</span></button>
+          <button type="button" class="button button-primary" id="save-onboarding" hidden>Salvar perfil <span>✓</span></button>
+        </div>
+      </div>
     </dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
   </body>

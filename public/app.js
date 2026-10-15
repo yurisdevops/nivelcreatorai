@@ -28,7 +28,36 @@ function announce(message) {
 }
 
 function openOnboarding() {
+  setOnboardingStep(0);
   dialog.showModal();
+}
+
+const onboardingSteps = [
+  { label: 'CONEXÃO' },
+  { label: 'NICHO' },
+  { label: 'OBJETIVOS E VOZ' },
+  { label: 'CONSENTIMENTO' }
+];
+let currentOnboardingStep = 0;
+
+function setOnboardingStep(step) {
+  currentOnboardingStep = Math.max(0, Math.min(onboardingSteps.length - 1, step));
+  document.querySelectorAll('[data-onboarding-step]').forEach((section, index) => {
+    section.hidden = index !== currentOnboardingStep;
+  });
+  document.querySelector('#onboarding-progress').textContent =
+    `PASSO ${currentOnboardingStep + 1} DE 4 · ${onboardingSteps[currentOnboardingStep].label}`;
+  document.querySelector('#cancel-onboarding').textContent = currentOnboardingStep === 0 ? 'Agora não' : 'Salvar depois';
+  document.querySelector('#back-onboarding').hidden = currentOnboardingStep === 0;
+  document.querySelector('#next-onboarding').hidden = currentOnboardingStep === onboardingSteps.length - 1;
+  document.querySelector('#save-onboarding').hidden = currentOnboardingStep !== onboardingSteps.length - 1;
+  if (currentOnboardingStep === onboardingSteps.length - 1) {
+    const niche = document.querySelector('#niche').value.trim();
+    const goal = document.querySelector('#goal').value;
+    const voice = document.querySelector('#voice').value.trim();
+    document.querySelector('#onboarding-summary').textContent =
+      `Nicho: ${niche} · objetivo: ${goal} · tom de voz: ${voice}. Você pode mudar essas informações nas configurações.`;
+  }
 }
 
 const notificationPopover = document.querySelector('#notification-popover');
@@ -141,6 +170,37 @@ document.querySelector('#notification-email-enabled').addEventListener('change',
 
 document.querySelectorAll('[data-open-onboarding]').forEach((button) => button.addEventListener('click', openOnboarding));
 document.querySelector('#cancel-onboarding').addEventListener('click', () => dialog.close());
+document.querySelector('#back-onboarding').addEventListener('click', () => setOnboardingStep(currentOnboardingStep - 1));
+document.querySelector('#next-onboarding').addEventListener('click', () => {
+  if (currentOnboardingStep === 1 && !document.querySelector('#niche').value.trim()) {
+    announce('Informe seu nicho para continuar.');
+    document.querySelector('#niche').focus();
+    return;
+  }
+  if (currentOnboardingStep === 2) {
+    if (!document.querySelector('#goal').value) {
+      announce('Escolha seu objetivo para continuar.');
+      document.querySelector('#goal').focus();
+      return;
+    }
+    if (!document.querySelector('#voice').value.trim()) {
+      announce('Conte como você gosta de se comunicar.');
+      document.querySelector('#voice').focus();
+      return;
+    }
+  }
+  setOnboardingStep(currentOnboardingStep + 1);
+});
+
+document.querySelector('#onboarding-connect-instagram').addEventListener('click', () => {
+  if (!document.querySelector('#onboarding-instagram-consent').checked) {
+    announce('Confirme a autorização para ler dados básicos e insights do Instagram.');
+    return;
+  }
+  document.querySelector('#instagram-insights-consent').checked = true;
+  dialog.close();
+  document.querySelector('#connect-instagram').click();
+});
 
 document.querySelector('#save-onboarding').addEventListener('click', () => {
   const profile = {
@@ -166,6 +226,7 @@ document.querySelector('#save-onboarding').addEventListener('click', () => {
     if (!result.ok) throw new Error(data.error || 'Não foi possível salvar o perfil.');
     announce('Perfil salvo no seu espaço.');
     dialog.close();
+    document.querySelector('#setup-banner')?.setAttribute('hidden', '');
     loadAccount();
   }).catch((error) => announce(error.message || 'Não foi possível salvar o perfil.'));
 });
@@ -1015,6 +1076,8 @@ async function loadInstagramConnection() {
     const data = await result.json();
     if (!result.ok) return;
     const status = document.querySelector('#instagram-connection-status');
+    const onboardingStatus = document.querySelector('#onboarding-instagram-status');
+    const onboardingConnect = document.querySelector('#onboarding-connect-instagram');
     const connect = document.querySelector('#connect-instagram');
     const disconnect = document.querySelector('#disconnect-instagram');
     const consent = document.querySelector('#instagram-insights-consent');
@@ -1024,6 +1087,9 @@ async function loadInstagramConnection() {
     consent.disabled = !data.configured;
     if (!data.configured) {
       status.textContent = 'A conexão estará disponível após configurar o app da Meta e a chave de criptografia.';
+      onboardingStatus.textContent = 'A conexão não está configurada neste ambiente. Você pode continuar sem Instagram.';
+      onboardingConnect.disabled = true;
+      onboardingConnect.title = 'A conexão estará disponível quando o app da Meta estiver configurado.';
     } else if (data.connection?.status === 'connected') {
       const expires = data.connection.expires_at
         ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(data.connection.expires_at))
@@ -1036,14 +1102,33 @@ async function loadInstagramConnection() {
         : data.connection.last_error === 'insights_unavailable'
           ? ' A Meta não retornou algumas métricas; valores ausentes não são estimados.' : '';
       status.textContent = `Conectado como @${data.connection.username} · última coleta: ${synced} · token válido até ${expires}.${issue}`;
+      onboardingStatus.textContent = `Conta conectada: @${data.connection.username}. Você pode seguir para confirmar seu perfil.`;
+      onboardingConnect.disabled = true;
+      onboardingConnect.textContent = 'Instagram conectado ✓';
     } else if (data.connection?.status === 'expired') {
       status.textContent = `A conexão de @${data.connection.username} expirou. Reconecte a conta para voltar a consultar insights.`;
+      onboardingStatus.textContent = `A conexão de @${data.connection.username} expirou. Você pode reconectar ou continuar sem métricas.`;
+      onboardingConnect.disabled = false;
+      onboardingConnect.textContent = 'Reconectar Instagram ↗';
       connect.textContent = 'Reconectar Instagram ↗';
+    } else if (!data.connection) {
+      status.textContent = 'Nenhuma conta profissional do Instagram conectada.';
+      onboardingStatus.textContent = 'Nenhuma conta conectada. A conexão é opcional e pode ser feita depois.';
+      onboardingConnect.disabled = false;
+      onboardingConnect.textContent = 'Conectar Instagram ↗';
+      connect.textContent = 'Conectar Instagram ↗';
     } else {
       status.textContent = 'A conexão precisa ser renovada. Reconecte sua conta profissional.';
+      onboardingStatus.textContent = 'Nenhuma conta conectada. A conexão é opcional e pode ser feita depois.';
+      onboardingConnect.disabled = false;
+      onboardingConnect.textContent = 'Conectar Instagram ↗';
       connect.textContent = 'Reconectar Instagram ↗';
     }
-  } catch { /* Keep the dashboard usable if the connection status is temporarily unavailable. */ }
+  } catch {
+    document.querySelector('#onboarding-instagram-status').textContent =
+      'Não foi possível verificar a conexão agora. Você pode continuar sem Instagram.';
+    document.querySelector('#onboarding-connect-instagram').disabled = true;
+  }
 }
 
 document.querySelector('#connect-instagram').addEventListener('click', async (event) => {

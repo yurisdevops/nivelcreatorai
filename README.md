@@ -5,6 +5,7 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 ## O que está implementado
 
 - Painel responsivo com tema azul-marinho e violeta baseado nas referências visuais fornecidas.
+- Onboarding em quatro passos para conexão opcional do Instagram, nicho, objetivo/tom de voz e consentimento separado para uso da IA; é possível concluir o perfil sem conectar a rede social.
 - Painel com quatro métricas vindas dos snapshots mais recentes, estado vazio quando ausentes, origem/período/sincronização e próximas ações derivadas de diagnósticos salvos.
 - Cadastro, login, confirmação de e-mail e logout via Supabase Auth. O Worker guarda os tokens em cookies `HttpOnly`, `Secure` e `SameSite=Lax`; a página não lê esses tokens.
 - MFA TOTP via Supabase Auth: creators podem ativar por opção; memberships com papel `admin` precisam manter ao menos um autenticador e usar sessão AAL2 nas APIs privadas. O Auth do Supabase valida o token antes de o Worker ler o nível de garantia.
