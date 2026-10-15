@@ -6,6 +6,10 @@ SUPABASE_SECRET_KEY=
 GEMINI_API_KEY=COLOQUE_SUA_CHAVE_LOCAL
 # Opcional; padrão atual do projeto: gemini-3.8-flash
 GEMINI_MODEL=gemini-3.8-flash
+# Teto global diário e preço máximo por 1 milhão de tokens (USD).
+AI_DAILY_BUDGET_USD=10
+GEMINI_INPUT_USD_PER_MILLION=1.5
+GEMINI_OUTPUT_USD_PER_MILLION=7.5
 # Optional Asaas Sandbox credentials; never use a production key with this implementation.
 ASAAS_API_KEY=
 ASAAS_WEBHOOK_TOKEN=

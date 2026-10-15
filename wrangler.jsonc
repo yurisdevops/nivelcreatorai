@@ -4,7 +4,10 @@
   "main": "src/index.js",
   "compatibility_date": "2026-10-15",
   "vars": {
-    "DATA_RETENTION_ENABLED": "false"
+    "DATA_RETENTION_ENABLED": "false",
+    "AI_DAILY_BUDGET_USD": "10",
+    "GEMINI_INPUT_USD_PER_MILLION": "1.5",
+    "GEMINI_OUTPUT_USD_PER_MILLION": "7.5"
   },
   "d1_databases": [
     {

@@ -1,5 +1,6 @@
 import { AuthError, assertSameOrigin, readJson } from "./auth.js";
-import { quotaCounts, releaseQuotaReservation, reserveQuota, resolveEntitlement } from "./quota.js";
+import { quotaCounts, releaseQuotaReservation, resolveEntitlement } from "./quota.js";
+import { reserveAiQuota, serializeAiRequest, settleAiBudget, usageFromGemini } from "./ai_budget.js";
 
 const OPERATION = "script_generation";
 const MAX_BRIEF_LENGTH = 1200;
@@ -62,9 +63,9 @@ Não invente uso pessoal, depoimentos, resultados, métricas, fatos sobre produt
   const response = await fetch(endpoint, {
     method: "POST",
     headers: { "content-type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
-    body: JSON.stringify({
+    body: serializeAiRequest({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: "application/json", responseSchema: outputSchema(), temperature: 0.7 }
+      generationConfig: { responseMimeType: "application/json", responseSchema: outputSchema(), temperature: 0.7, maxOutputTokens: 2600 }
     }),
     signal: AbortSignal.timeout(25000)
   });
@@ -76,11 +77,11 @@ Não invente uso pessoal, depoimentos, resultados, métricas, fatos sobre produt
   try { parsed = JSON.parse(text); } catch { throw new AuthError(502, "A IA não retornou um roteiro válido."); }
   return {
     script: validateScript(parsed),
-    tokens: Math.max(0, Number(payload.usageMetadata?.totalTokenCount) || 0)
+    usage: usageFromGemini(payload), tokens: Math.max(0, Number(payload.usageMetadata?.totalTokenCount) || 0)
   };
 }
 
-async function commitScript(env, workspaceId, reservationId, entitlementInfo, script, tokens, format) {
+async function commitScript(env, workspaceId, reservationId, entitlementInfo, script, tokens, costEstimate, format) {
   const db = env.DB;
   const scriptId = crypto.randomUUID();
   const content = { ...script, format };
@@ -93,9 +94,11 @@ async function commitScript(env, workspaceId, reservationId, entitlementInfo, sc
       WHERE id=?1 AND status='reserved' AND EXISTS (SELECT 1 FROM scripts WHERE id=?2)`)
       .bind(reservationId, scriptId),
     db.prepare(`INSERT INTO ai_usage_events (id, workspace_id, operation, tokens, cost_estimate, cycle_key)
-      SELECT ?1, ?2, ?3, ?4, NULL, ?5 WHERE EXISTS (
-        SELECT 1 FROM quota_reservations WHERE id=?6 AND status='completed'
-      )`).bind(crypto.randomUUID(), workspaceId, OPERATION, tokens, entitlementInfo.cycleKey, reservationId)
+      SELECT ?1, ?2, ?3, ?4, ?5, ?6 WHERE EXISTS (
+        SELECT 1 FROM quota_reservations WHERE id=?7 AND status='completed'
+      ) AND EXISTS (
+        SELECT 1 FROM ai_budget_reservations WHERE id=?7 AND status='completed'
+      )`).bind(crypto.randomUUID(), workspaceId, OPERATION, tokens, costEstimate, entitlementInfo.cycleKey, reservationId)
   ]);
   if (!results[0]?.meta?.changes || !results[1]?.meta?.changes || !results[2]?.meta?.changes) {
     throw new AuthError(503, "Não foi possível salvar o roteiro. Tente novamente.");
@@ -130,10 +133,11 @@ export async function creativeHandler(request, env, path, account) {
   if (!profile.ai_data_consent_at) throw new AuthError(403, "Autorize o envio do perfil e do briefing escolhido ao Gemini no seu perfil para usar a geração por IA.");
   if (!env.GEMINI_API_KEY) throw new AuthError(503, "A geração por IA ainda não foi configurada.");
   const access = await resolveEntitlement(env, account.workspace_id);
-  const reservationId = await reserveQuota(env, account.workspace_id, access, OPERATION);
+  const reservationId = await reserveAiQuota(env, account.workspace_id, access, OPERATION, access.limit, 2600);
   try {
-    const { script, tokens } = await generateWithGemini(env, brief, format, profile);
-    const saved = await commitScript(env, account.workspace_id, reservationId, access, script, tokens, format);
+    const { script, tokens, usage } = await generateWithGemini(env, brief, format, profile);
+    const costEstimate = await settleAiBudget(env, reservationId, usage);
+    const saved = await commitScript(env, account.workspace_id, reservationId, access, script, tokens, costEstimate, format);
     return { script: saved };
   } catch (error) {
     await releaseQuotaReservation(env, reservationId).catch(() => {});

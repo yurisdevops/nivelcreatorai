@@ -14,6 +14,7 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 - Perfil e consentimento versionado para processamento de briefings, métricas autorizadas e contexto pelo Gemini; geração fica bloqueada até o consentimento, que pode ser retirado no perfil.
 - Estúdio Criativo com geração de roteiros via Gemini, briefings limitados e tratados como conteúdo não confiável, saída estruturada validada e roteiros salvos no workspace.
 - Reserva de quota por ciclo antes da chamada de IA (10 roteiros no trial e 60 por ciclo pago); falhas liberam a reserva e roteiros persistidos consomem a quota.
+- Orçamento global atômico de IA por dia UTC no D1: cada chamada reserva o custo máximo permitido pela entrada limitada a 64.000 bytes e pelos tokens de saída; ao atingir o limite, novas gerações param até o próximo dia. O custo estimado usa o uso retornado pelo Gemini e fica registrado no workspace.
 - Limites de borda para tentativas de acesso (30/minuto por rota e IP) e gerações de IA (8/minuto por workspace e rota); eles complementam as quotas do banco e não servem como contabilidade global exata.
 - Lista de roteiros privada por workspace, com limite de consulta e sem credenciais de IA expostas ao navegador.
 - Diagnóstico com quota (2 no trial, 8 no pago), que exige métricas com fonte e período e não inventa score quando os dados não existem.
@@ -27,7 +28,7 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 - Configurações de perfil e consentimento, exportação JSON do workspace e solicitação de exclusão com remoção do usuário Auth por tarefa agendada.
 - Retenção automática opcional após 30 dias sem acesso vigente, com aviso no app sete dias antes, proteção de assinaturas ativas e tabela operacional para retenções legais; vem desativada até a aprovação e habilitação da política.
 - Checkout recorrente de cartão no Asaas sandbox, confirmação via webhook autenticado, deduplicação, processamento assíncrono, cancelamento e tolerância de 3 dias para inadimplência.
-- Migrações D1 versionadas para dados centrais, calendário, agente, consentimento de IA, planos editoriais, notificações, direitos de dados e cobrança.
+- Migrações D1 versionadas para dados centrais, calendário, agente, consentimento de IA, planos editoriais, notificações, direitos de dados, cobrança, retenção e orçamento global de IA.
 - Cabeçalhos básicos de segurança, CSP sem scripts inline, validação de origem e limite de corpo nas rotas JSON.
 
 ## Desenvolvimento local
@@ -36,7 +37,7 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 2. Crie um projeto Supabase exclusivo para o Nivel Creator AI. Ative confirmação de e-mail e adicione `http://localhost:8787/auth/callback` às URLs de redirecionamento permitidas. Em Authentication → MFA, habilite TOTP e permita verificação de fatores; cada creator pode ativar a opção em Configurações → Segurança da conta.
 3. Copie `.dev.vars.example` para `.dev.vars` e preencha `SUPABASE_URL`, `SUPABASE_ANON_KEY` e `GEMINI_API_KEY` com credenciais próprias. Nunca coloque credenciais de serviço no navegador nem versionadas no Git.
 4. Crie uma base D1 exclusiva: `npx wrangler d1 create nivel-creator`. Substitua `replace-with-your-d1-database-id` em `wrangler.jsonc` pelo `database_id` retornado.
-5. Aplique o esquema local: `npm run db:local`.
+5. Aplique o esquema local: `npm run db:local` (inclui o controle global diário de IA).
 6. Rode `npm run dev` e abra `http://localhost:8787`.
 
 Crie também o bucket privado usado pela Biblioteca com `npx wrangler r2 bucket create nivel-creator-private`. A configuração não publica o bucket; uploads, downloads e exclusões passam pelo Worker autenticado. Os tipos são validados pela assinatura do conteúdo, não pelo nome ou cabeçalho enviado pelo navegador.
@@ -62,7 +63,7 @@ Supabase recomenda validar JWTs com `getClaims` ou validar o token no Auth serve
 - E-mail transacional para notificações continua desativado até configurar um provedor e preferências de envio.
 - Varredura antimalware e política operacional de retenção dos objetos R2.
 - Asaas: conectar e validar conta sandbox, reconciliação diária e fluxo de Pix; a implementação atual só oferece recorrência por cartão em sandbox.
-- MFA obrigatório para administradores (MFA opcional para creators e enforcement AAL2 de sessões opt-in já estão implementados), aprovação jurídica da política de retenção, backups restauráveis, orçamento diário global de IA/circuit breaker e observabilidade operacional. Os rate limits do Worker são distribuídos por localização Cloudflare e permissivos; não substituem orçamento financeiro nem controle global exato.
+- MFA obrigatório para administradores (MFA opcional para creators e enforcement AAL2 de sessões opt-in já estão implementados), aprovação jurídica da política de retenção, backups restauráveis, circuit breaker por falha do provedor e observabilidade operacional. Os rate limits do Worker são distribuídos por localização Cloudflare e permissivos; não substituem o teto global diário nem servem como contabilidade exata.
 - Revisão jurídica, LGPD, segurança e testes descritos na especificação mestre.
 
 Não existe conexão com a conta Asaas ou Nivel Studio, OAuth do Instagram, publicação automática ou provisionamento de infraestrutura remota por este código. As migrações ainda não foram aplicadas.
@@ -71,6 +72,8 @@ Os namespaces `2026101501`, `2026101502` e `2026101503` dos rate limiters precis
 
 Creators podem cadastrar mais de um autenticador TOTP para reduzir o risco de perder acesso. O app ainda não oferece códigos de recuperação. MFA obrigatório por papel administrativo depende de um fluxo de administração e de uma política de papéis definida.
 
-A migração `0010_workspace_retention.sql` adiciona a fila e os bloqueios de retenção. `DATA_RETENTION_ENABLED` vem como `false`; só altere para `true` após aprovar a política de privacidade e confirmar a cobertura de retenção legal. A rotina exige D1, Supabase Auth administrativo e o bucket R2 configurados. Retenções legais podem ser registradas por operações em `workspace_retention_holds`; não existe endpoint público para criar ou remover esses bloqueios.
+`AI_DAILY_BUDGET_USD` define o teto global em dólares por dia UTC. `GEMINI_INPUT_USD_PER_MILLION` e `GEMINI_OUTPUT_USD_PER_MILLION` devem refletir o maior preço aplicável ao modelo e nível de serviço configurados; os padrões usam os preços de texto padrão do Gemini 3.8 Flash previstos para 2027, acima dos valores promocionais vigentes até 31/12/2026. Atualize os preços quando o provedor mudar sua tabela. O limite é estimado pelo uso de tokens retornado pelo Gemini; confira a fatura do provedor antes de produção. Reservas de chamadas interrompidas sem metadados mantêm o teto reservado até o fim do dia UTC.
+
+A migração `0010_workspace_retention.sql` adiciona a fila e os bloqueios de retenção. `0011_global_ai_budget.sql` cria o ledger atômico do teto diário. `DATA_RETENTION_ENABLED` vem como `false`; só altere para `true` após aprovar a política de privacidade e confirmar a cobertura de retenção legal. A rotina exige D1, Supabase Auth administrativo e o bucket R2 configurados. Retenções legais podem ser registradas por operações em `workspace_retention_holds`; não existe endpoint público para criar ou remover esses bloqueios.
 
 Para idempotência, o Asaas mantém o identificador, hash e horário do evento; os payloads operacionais e o conteúdo da fila são apagados 30 dias após o processamento concluído ou falho.
