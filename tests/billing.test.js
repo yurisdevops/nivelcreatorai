@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { checkoutPayload, monthAfter, validPixCheckoutPayment } from "../src/billing.js";
+import { checkoutPayload, monthAfter, paymentWasReversed, validPixCheckoutPayment } from "../src/billing.js";
 
 test("Pix checkout creates one detached payment and no recurring authorization", () => {
   const payload = checkoutPayload("https://creator.example", "nivel-creator-checkout:pix-1", "PIX", "2026-10-15");
@@ -37,4 +37,10 @@ test("monthly billing period clamps month ends and preserves UTC time", () => {
   assert.equal(monthAfter("2025-01-31T15:30:00.000Z"), "2025-02-28T15:30:00.000Z");
   assert.equal(monthAfter("2024-01-31T15:30:00.000Z"), "2024-02-29T15:30:00.000Z");
   assert.equal(monthAfter("2026-10-15T12:00:00.000Z"), "2026-11-15T12:00:00.000Z");
+});
+
+test("reconciliation only treats completed refunds or chargebacks as reversals", () => {
+  assert.equal(paymentWasReversed({ status: "RECEIVED", refunds: [{ status: "PENDING", value: 59.9 }] }), false);
+  assert.equal(paymentWasReversed({ status: "RECEIVED", refunds: [{ status: "DONE", value: 10 }] }), true);
+  assert.equal(paymentWasReversed({ status: "CHARGEBACK_REQUESTED" }), true);
 });

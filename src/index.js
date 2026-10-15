@@ -14,7 +14,7 @@ import { planningHandler } from "./planning.js";
 import { dashboardHandler } from "./dashboard.js";
 import { notificationCronHandler, notificationHandler } from "./notifications.js";
 import { accountDataHandler, processDeletionQueue } from "./account_data.js";
-import { billingHandler, processAsaasQueue, receiveAsaasWebhook } from "./billing.js";
+import { billingHandler, processAsaasQueue, receiveAsaasWebhook, reconcileAsaasSubscriptions } from "./billing.js";
 import { instagramCallback, instagramHandler, refreshInstagramTokens, syncInstagramInsights } from "./instagram.js";
 import { filesHandler } from "./files.js";
 
@@ -415,6 +415,7 @@ export default {
   },
   async scheduled(_event, env, ctx) {
     ctx.waitUntil(Promise.all([notificationCronHandler(env), processDeletionQueue(env), processAsaasQueue(env),
+      reconcileAsaasSubscriptions(env),
       refreshInstagramTokens(env), syncInstagramInsights(env)]));
   }
 };

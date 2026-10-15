@@ -47,6 +47,11 @@ export function validPixCheckoutPayment(checkout) {
   return cents === Math.round(PRICE * 100);
 }
 
+export function paymentWasReversed(payment) {
+  if (["REFUNDED", "PARTIALLY_REFUNDED", "CHARGEBACK_REQUESTED"].includes(payment?.status)) return true;
+  return Array.isArray(payment?.refunds) && payment.refunds.some((refund) => refund?.status === "DONE" && Number(refund.value) > 0);
+}
+
 export function checkoutPayload(origin, externalReference, billingType, firstDueDate) {
   const recurring = billingType === "CREDIT_CARD";
   const successCode = recurring ? "aguardando-webhook" : "pix-aguardando-webhook";
@@ -354,6 +359,88 @@ async function processWebhookEvent(env, event) {
     return "ignored";
   }
   return "ignored";
+}
+
+async function reconcileAsaasSubscription(env, row) {
+  const subscriptionPath = `/subscriptions/${encodeURIComponent(row.provider_id)}`;
+  const recentDate = new Date(Date.now() - 45 * 86400000).toISOString().slice(0, 10);
+  const paymentQuery = new URLSearchParams({ subscription: row.provider_id, limit: "100", offset: "0", "dateCreated[ge]": recentDate });
+  const [subscriptionResponse, paymentsResponse] = await Promise.all([
+    asaasRequest(env, subscriptionPath),
+    asaasRequest(env, `/payments?${paymentQuery.toString()}`)
+  ]);
+  if (subscriptionResponse.status === 404) {
+    await env.DB.prepare(`UPDATE subscriptions SET status=CASE WHEN period_end IS NOT NULL AND julianday(period_end)>julianday('now')
+        THEN 'canceled' ELSE 'expired' END, cancel_at_period_end=1,
+        reconciled_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?1`)
+      .bind(row.id).run();
+    return;
+  }
+  if (!subscriptionResponse.ok || !paymentsResponse.ok) throw new Error("Asaas reconciliation request failed");
+  const remote = await subscriptionResponse.json();
+  const paymentData = await paymentsResponse.json();
+  if (remote.id !== row.provider_id || !["ACTIVE", "INACTIVE", "EXPIRED"].includes(remote.status) ||
+      Math.round(Number(remote.value) * 100) !== Math.round(PRICE * 100) || remote.cycle !== "MONTHLY" ||
+      !Array.isArray(paymentData.data)) throw new Error("Asaas reconciliation response did not match the stored subscription");
+
+  const payments = paymentData.data.filter((payment) => Math.round(Number(payment.value) * 100) === Math.round(PRICE * 100))
+    .sort((left, right) => String(right.dueDate || right.dateCreated || "").localeCompare(String(left.dueDate || left.dateCreated || "")));
+  const payment = payments[0];
+  const settled = payment && ["RECEIVED", "CONFIRMED"].includes(payment.status);
+  const refunded = paymentWasReversed(payment);
+  const overdue = payment?.status === "OVERDUE";
+  const now = Date.now();
+
+  if (refunded) {
+    await env.DB.prepare(`UPDATE subscriptions SET status='suspended', reconciled_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?1`)
+      .bind(row.id).run();
+  } else if (settled) {
+    const date = payment.paymentDate || payment.confirmedDate || payment.dueDate || payment.dateCreated;
+    const candidateStart = Number.isFinite(Date.parse(date || "")) ? new Date(date).toISOString() : null;
+    const newerPayment = candidateStart && (!row.period_start || Date.parse(candidateStart) > Date.parse(row.period_start));
+    const periodStart = newerPayment ? candidateStart : row.period_start;
+    const periodEnd = newerPayment ? monthAfter(candidateStart) : row.period_end;
+    const providerInactive = remote.status !== "ACTIVE";
+    const nextStatus = providerInactive ? (Date.parse(periodEnd || "") > now ? "canceled" : "expired") : "active";
+    await env.DB.prepare(`UPDATE subscriptions SET status=?1, period_start=?2, period_end=?3,
+        cancel_at_period_end=?4, reconciled_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?5`)
+      .bind(nextStatus, periodStart, periodEnd, providerInactive ? 1 : 0, row.id).run();
+  } else if (remote.status !== "ACTIVE") {
+    await env.DB.prepare(`UPDATE subscriptions SET status=CASE WHEN period_end IS NOT NULL AND julianday(period_end)>julianday('now')
+        THEN 'canceled' ELSE 'expired' END, cancel_at_period_end=1,
+        reconciled_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?1`)
+      .bind(row.id).run();
+  } else if ((overdue || Date.parse(row.period_end || "") <= now) && ["active", "past_due"].includes(row.status)) {
+    await env.DB.prepare(`UPDATE subscriptions SET status='past_due',
+        reconciled_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?1`)
+      .bind(row.id).run();
+  } else {
+    await env.DB.prepare(`UPDATE subscriptions SET reconciled_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?1`)
+      .bind(row.id).run();
+  }
+}
+
+export async function reconcileAsaasSubscriptions(env, batchSize = 5) {
+  if (!env.DB || !env.ASAAS_API_KEY) return;
+  let results;
+  try {
+    ({ results } = await env.DB.prepare(`SELECT s.id, s.workspace_id, s.provider_id, s.status, s.period_start, s.period_end
+      FROM subscriptions s JOIN billing_checkout_intents i ON i.id=s.checkout_intent_id
+      WHERE s.status IN ('pending','active','past_due','canceled') AND i.billing_type='CREDIT_CARD'
+        AND s.provider_id NOT LIKE 'checkout:%' AND s.provider_id NOT LIKE 'pix:%'
+        AND (s.reconciled_at IS NULL OR date(s.reconciled_at)<date('now'))
+      ORDER BY COALESCE(s.period_end,'') ASC LIMIT ?1`).bind(batchSize).all());
+  } catch {
+    return;
+  }
+  for (const row of results || []) {
+    try {
+      await reconcileAsaasSubscription(env, row);
+    } catch {
+      await env.DB.prepare(`UPDATE subscriptions SET reconciled_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?1`)
+        .bind(row.id).run().catch(() => {});
+    }
+  }
 }
 
 export async function processAsaasQueue(env) {

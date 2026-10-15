@@ -28,7 +28,7 @@ Aplicação SaaS independente para creators. Este projeto vive em sua própria p
 - Notificações internas de encerramento do trial, agendadas por Cron com deduplicação; leitura e pausa por workspace.
 - Configurações de perfil e consentimento, exportação JSON do workspace e solicitação de exclusão com remoção do usuário Auth por tarefa agendada.
 - Retenção automática opcional após 30 dias sem acesso vigente, com aviso no app sete dias antes, proteção de assinaturas ativas e tabela operacional para retenções legais; vem desativada até a aprovação e habilitação da política.
-- Checkout recorrente de cartão e Pix avulso por ciclo mensal no Asaas sandbox. O Pix não cria renovação; só ativa acesso após webhook autenticado que confirma checkout pago, valor e modalidade. Eventos são deduplicados e processados em fila; cartão mantém cancelamento e tolerância de 3 dias para inadimplência.
+- Checkout recorrente de cartão e Pix avulso por ciclo mensal no Asaas sandbox. O Pix não cria renovação; só ativa acesso após webhook autenticado que confirma checkout pago, valor e modalidade. Eventos são deduplicados e processados em fila; uma conciliação diária consulta assinaturas e cobranças para recuperar atualizações perdidas. Cartão mantém cancelamento e tolerância de 3 dias para inadimplência.
 - Migrações D1 versionadas para dados centrais, calendário, agente, consentimento de IA, planos editoriais, notificações, direitos de dados, cobrança, retenção e orçamento global de IA.
 - Cabeçalhos básicos de segurança, CSP sem scripts inline, validação de origem e limite de corpo nas rotas JSON.
 
@@ -65,7 +65,7 @@ Supabase recomenda validar JWTs com `getClaims` ou validar o token no Auth serve
 - Aprovisionar e configurar os recursos reais de Supabase, D1 e Gemini para o ambiente de beta.
 - E-mail transacional para notificações continua desativado até configurar um provedor e preferências de envio.
 - Varredura antimalware e política operacional de retenção dos objetos R2.
-- Asaas: conectar e validar conta sandbox, implementar reconciliação diária e avaliar Pix Automático. O Pix disponível é avulso e precisa ser pago novamente a cada ciclo.
+- Asaas: conectar e validar conta sandbox e avaliar Pix Automático. O Pix disponível é avulso e precisa ser pago novamente a cada ciclo.
 - Aprovação jurídica da política de retenção, backups restauráveis e observabilidade operacional. Os rate limits do Worker são distribuídos por localização Cloudflare e permissivos; não substituem o teto global diário nem servem como contabilidade exata.
 - Revisão jurídica, LGPD, segurança e testes descritos na especificação mestre.
 
