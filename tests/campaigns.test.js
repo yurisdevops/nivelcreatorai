@@ -61,3 +61,8 @@ test("campaign scripts are refused until the creator gives an opinion about the 
   await assert.rejects(creativeHandler(request("/api/creative/generate", "POST", body), { DB: db }, "/api/creative/generate", account),
     (error) => error instanceof AuthError && error.status === 400 && error.code === "opinion_required");
 });
+
+test("campaign routes are not swallowed by the calendar handler", async () => {
+  const { calendarHandler } = await import("../src/calendar.js");
+  assert.equal(await calendarHandler(request("/api/campaigns", "GET"), { DB: {} }, "/api/campaigns", account), null);
+});

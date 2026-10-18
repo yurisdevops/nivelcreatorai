@@ -592,6 +592,10 @@ async function postCreative(path, body) {
   const result = await fetch(path, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   const data = await result.json().catch(() => ({}));
   if (result.status === 401) { location.href = '/entrar.html?redirect=%2F'; return null; }
+  if (result.status === 403 && /Autorize/.test(data.error || '')) {
+    openOnboarding();
+    throw new Error('Para usar a IA, complete seu perfil e marque a autorização de uso da IA no último passo.');
+  }
   if (!result.ok) throw new Error(data.error || 'Não foi possível concluir a geração.');
   return data;
 }

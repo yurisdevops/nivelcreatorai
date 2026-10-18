@@ -24,6 +24,7 @@ function cleanEvent(body, partial = false) {
 }
 
 export async function calendarHandler(request, env, path, account) {
+  if (!path.startsWith("/api/calendar/")) return null;
   const db = env.DB;
   if (path === "/api/calendar/events" && request.method === "GET") {
     const { results } = await db.prepare(`SELECT id, script_id, title, format, scheduled_at, status, notes, created_at, updated_at
