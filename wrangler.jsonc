@@ -26,9 +26,8 @@
       "bucket_name": "nivel-creator-private"
     }
   ],
-  "services": [
-    { "binding": "FILE_SCANNER", "service": "nivel-creator-file-scanner" }
-  ],
+  // The FILE_SCANNER service binding returns when the ClamAV scanner Worker is
+  // published. Without it, library uploads fail closed.
   "send_email": [
     { "name": "EMAIL" }
   ],
