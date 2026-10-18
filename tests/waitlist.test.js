@@ -47,3 +47,13 @@ test("waitlist rejects cross-origin posts and silently drops honeypot submission
   assert.deepEqual(result, { joined: true });
   assert.equal(db.calls.length, 0);
 });
+
+test("closed beta blocks sign-up for e-mails that were not approved", async () => {
+  const db = (approvedAt) => ({ prepare: () => ({ bind: () => ({ first: async () => (approvedAt === undefined ? null : { approved_at: approvedAt }) }) }) });
+  const { assertBetaApproved } = await import("../src/waitlist.js");
+  await assert.rejects(assertBetaApproved({ BETA_INVITE_ONLY: "true", DB: db() }, "a@example.com"),
+    (error) => error instanceof AuthError && error.status === 403 && error.code === "beta_not_approved");
+  await assert.rejects(assertBetaApproved({ BETA_INVITE_ONLY: "true", DB: db(null) }, "a@example.com"), AuthError);
+  await assertBetaApproved({ BETA_INVITE_ONLY: "true", DB: db("2026-10-18T00:00:00Z") }, "a@example.com");
+  await assertBetaApproved({ BETA_INVITE_ONLY: "false", DB: db() }, "a@example.com");
+});

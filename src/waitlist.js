@@ -52,3 +52,17 @@ export async function waitlistHandler(request, env, path) {
       entry.biggestPain, entry.founderInterest, WAITLIST_CONSENT_VERSION, entry.source).run();
   return { joined: true };
 }
+
+export function betaInviteOnly(env) {
+  return env.BETA_INVITE_ONLY === "true";
+}
+
+// During the closed beta only e-mails approved from the waitlist can create an account.
+export async function assertBetaApproved(env, email) {
+  if (!betaInviteOnly(env)) return;
+  const row = await env.DB.prepare("SELECT approved_at FROM waitlist_entries WHERE email=?1")
+    .bind(email).first();
+  if (!row?.approved_at) {
+    throw new AuthError(403, "O Nível Creator está em beta fechado. Entre na lista de espera em /lista e avisaremos quando sua vaga abrir.", "beta_not_approved");
+  }
+}

@@ -17,7 +17,7 @@ import { accountDataHandler, processDeletionQueue } from "./account_data.js";
 import { billingHandler, processAsaasQueue, receiveAsaasWebhook, reconcileAsaasSubscriptions } from "./billing.js";
 import { instagramCallback, instagramHandler, refreshInstagramTokens, syncInstagramInsights } from "./instagram.js";
 import { filesHandler } from "./files.js";
-import { waitlistHandler } from "./waitlist.js";
+import { assertBetaApproved, waitlistHandler } from "./waitlist.js";
 
 const securityHeaders = {
   "content-security-policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'",
@@ -152,6 +152,7 @@ async function authHandler(request, env, path) {
     if (!isProviderConfigured(env)) throw new AuthError(503, "Configure Supabase Auth e D1 para ativar o cadastro.");
     assertSameOrigin(request);
     const credentials = validCredentials(await readJson(request));
+    await assertBetaApproved(env, credentials.email);
     const callback = new URL("/auth/callback", request.url).toString();
     const result = await signUp(env, credentials.email, credentials.password, callback);
     if (!result.ok) throw authResponseError(result.status);
