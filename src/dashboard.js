@@ -31,9 +31,27 @@ export async function dashboardHandler(request, env, path, account) {
     db.prepare(`SELECT status, starts_at, ends_at FROM trials WHERE workspace_id=?1`).bind(workspaceId).first()
   ]);
   const metrics = Object.fromEntries(METRICS.map((name) => [name, null]));
+  const previous = Object.fromEntries(METRICS.map((name) => [name, null]));
   for (const row of metricRows.results || []) {
-    if (Object.hasOwn(metrics, row.metric) && metrics[row.metric] === null) metrics[row.metric] = row;
+    if (!Object.hasOwn(metrics, row.metric)) continue;
+    if (metrics[row.metric] === null) metrics[row.metric] = row;
+    else if (previous[row.metric] === null && row.period_end < metrics[row.metric].period_start &&
+      row.availability === "available" && Number.isFinite(row.value)) previous[row.metric] = row;
   }
+  // The change compares the latest available value with the newest earlier period; it stays null without real data.
+  for (const name of METRICS) {
+    const current = metrics[name];
+    const before = previous[name];
+    if (current && current.availability === "available" && Number.isFinite(current.value) && before && before.value > 0) {
+      metrics[name] = { ...current, change: Math.round(((current.value - before.value) / before.value) * 1000) / 10,
+        previous_period_end: before.period_end };
+    }
+  }
+  const followerSeries = (metricRows.results || [])
+    .filter((row) => row.metric === "followers" && row.availability === "available" && Number.isFinite(row.value))
+    .map((row) => ({ date: row.period_end, value: row.value }))
+    .filter((point, index, all) => all.findIndex((other) => other.date === point.date) === index)
+    .slice(0, 30).reverse();
   let recommendations = { strengths: [], gaps: [], opportunities: [] };
   try {
     const parsed = parseJson(strategy?.recommendations_json, recommendations);
@@ -47,6 +65,7 @@ export async function dashboardHandler(request, env, path, account) {
     .slice(0, 3).map(({ title, action, evidence }) => ({ title, action, evidence }));
   return {
     metrics,
+    follower_series: followerSeries,
     diagnostic: strategy ? { summary: strategy.hypothesis, created_at: strategy.created_at } : null,
     actions,
     upcoming: upcoming.results || [],

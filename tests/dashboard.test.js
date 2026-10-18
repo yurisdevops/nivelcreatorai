@@ -66,3 +66,15 @@ test("dashboard rejects non-GET requests and leaves unrelated routes to the rout
     (error) => error instanceof AuthError && error.status === 405);
   assert.equal(await dashboardHandler(request("/api/other"), { DB: dashboardDb() }, "/api/other", account), null);
 });
+
+test("dashboard reports the change against the previous real period and never without one", async () => {
+  const metrics = [
+    { metric: "followers", period_start: "2026-10-17", period_end: "2026-10-17", value: 1100, availability: "available", source: "instagram", fetched_at: "2026-10-18T00:00:00Z" },
+    { metric: "followers", period_start: "2026-10-10", period_end: "2026-10-10", value: 1000, availability: "available", source: "instagram", fetched_at: "2026-10-11T00:00:00Z" },
+    { metric: "reach", period_start: "2026-10-17", period_end: "2026-10-17", value: 500, availability: "available", source: "instagram", fetched_at: "2026-10-18T00:00:00Z" }
+  ];
+  const result = await dashboardHandler(request(), { DB: dashboardDb({ metrics }) }, "/api/dashboard", account);
+  assert.equal(result.metrics.followers.change, 10);
+  assert.equal(result.metrics.reach.change, undefined);
+  assert.deepEqual(result.follower_series.map((point) => point.value), [1000, 1100]);
+});

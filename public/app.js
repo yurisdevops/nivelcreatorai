@@ -1555,6 +1555,12 @@ function renderHomeDashboard(data) {
       value.textContent = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1, notation: row.value >= 100000 ? 'compact' : 'standard' }).format(row.value);
       const synced = row.fetched_at ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(row.fetched_at)) : 'sem horário informado';
       note.textContent = `${row.source} · ${row.period_start} a ${row.period_end} · sync ${synced}`;
+      if (Number.isFinite(row.change)) {
+        const delta = document.createElement('span');
+        delta.className = `metric-delta ${row.change >= 0 ? 'up' : 'down'}`;
+        delta.textContent = `${row.change >= 0 ? '↑ +' : '↓ '}${String(row.change).replace('.', ',')}% vs. período anterior`;
+        note.prepend(delta);
+      }
     } else {
       value.textContent = '—';
       note.textContent = row?.availability === 'limited' ? 'A API disponibilizou este dado com limitações.'
@@ -1562,6 +1568,8 @@ function renderHomeDashboard(data) {
           : `Sem dados sincronizados para ${label.toLocaleLowerCase('pt-BR')}.`;
     }
   }
+
+  renderFollowerChart(data.follower_series || []);
 
   const summaryTitle = document.querySelector('#home-summary-title');
   const summaryCopy = document.querySelector('#home-summary-copy');
@@ -1617,12 +1625,86 @@ function renderHomeDashboard(data) {
   }
 }
 
+function renderFollowerChart(series) {
+  const box = document.querySelector('#home-chart');
+  box.replaceChildren();
+  if (series.length < 2) {
+    const empty = document.createElement('p');
+    empty.className = 'empty-copy';
+    empty.textContent = 'O gráfico aparece depois das primeiras sincronizações do Instagram.';
+    box.append(empty);
+    return;
+  }
+  const width = 600, height = 180, pad = 24;
+  const values = series.map((point) => point.value);
+  const min = Math.min(...values), max = Math.max(...values);
+  const span = max - min || 1;
+  const points = series.map((point, index) => [pad + (index / (series.length - 1)) * (width - pad * 2),
+    height - pad - ((point.value - min) / span) * (height - pad * 2)]);
+  const line = points.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', `Seguidores de ${values[0]} para ${values[values.length - 1]} no período`);
+  const area = document.createElementNS(ns, 'polygon');
+  area.setAttribute('points', `${pad},${height - pad} ${line} ${width - pad},${height - pad}`);
+  area.setAttribute('class', 'chart-area');
+  const path = document.createElementNS(ns, 'polyline');
+  path.setAttribute('points', line);
+  path.setAttribute('class', 'chart-line');
+  const [lastX, lastY] = points[points.length - 1];
+  const dot = document.createElementNS(ns, 'circle');
+  dot.setAttribute('cx', lastX); dot.setAttribute('cy', lastY); dot.setAttribute('r', 5);
+  dot.setAttribute('class', 'chart-dot');
+  svg.append(area, path, dot);
+  const caption = document.createElement('p');
+  caption.className = 'privacy-note';
+  const format = new Intl.NumberFormat('pt-BR');
+  caption.textContent = `${format.format(values[0])} → ${format.format(values[values.length - 1])} seguidores (${series[0].date} a ${series[series.length - 1].date})`;
+  box.append(svg, caption);
+}
+
+async function loadHomeCampaigns() {
+  const box = document.querySelector('#home-campaigns');
+  try {
+    const result = await fetch('/api/campaigns', { credentials: 'same-origin' });
+    if (!result.ok) return;
+    const { campaigns } = await result.json();
+    const active = campaigns.filter((item) => ['draft', 'submitted', 'negotiation', 'in_progress'].includes(item.status));
+    const prospecting = campaigns.filter((item) => item.status === 'prospecting').length;
+    const pending = active.flatMap((item) => item.deliverables || []).filter((item) => !item.done).length;
+    const next = active.filter((item) => item.due_at).sort((a, b) => a.due_at.localeCompare(b.due_at))[0];
+    box.replaceChildren();
+    const stats = [[String(active.length), 'ativas'], [String(prospecting), 'mirando'], [String(pending), 'entregáveis pendentes']];
+    const row = document.createElement('div');
+    row.className = 'home-campaign-stats';
+    for (const [value, label] of stats) {
+      const item = document.createElement('div');
+      const strong = document.createElement('b');
+      strong.textContent = value;
+      const small = document.createElement('small');
+      small.textContent = label;
+      item.append(strong, small);
+      row.append(item);
+    }
+    box.append(row);
+    const note = document.createElement('p');
+    note.className = 'privacy-note';
+    note.textContent = next
+      ? `Próxima entrega: ${next.brand_name} · ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(`${next.due_at}T12:00:00`))}`
+      : campaigns.length ? 'Nenhum prazo próximo.' : 'Registre a primeira marca que você está mirando.';
+    box.append(note);
+  } catch { /* Keep the empty state when campaigns are unavailable. */ }
+}
+
 async function loadHomeDashboard() {
   try {
     const result = await fetch('/api/dashboard', { credentials: 'same-origin' });
     if (result.status === 401) return;
     const data = await result.json();
     if (result.ok) renderHomeDashboard(data);
+    loadHomeCampaigns();
   } catch { /* Keep honest empty states if dashboard data is temporarily unavailable. */ }
 }
 
