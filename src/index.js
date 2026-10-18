@@ -1,6 +1,6 @@
 import {
   AuthError, accessTokenFromRequest, assertSameOrigin, authConfigured, authResponseError,
-  clearSessionCookies, readJson, requireUser, requiresAdminMfa, sessionFromResponse, signIn, signOut,
+  clearSessionCookies, hasSessionCookie, readJson, requireUser, requiresAdminMfa, sessionFromResponse, signIn, signOut,
   signUp, validCredentials, verifyEmail, recoverPassword, updatePassword,
   enrollTotp, challengeTotp, verifyTotp, removeTotp, verifiedTotpFactors, allTotpFactors
 } from "./auth.js";
@@ -406,6 +406,10 @@ export default {
       }
 
       if (url.pathname.startsWith("/api/")) return response({ error: "Rota não encontrada." }, 404);
+      // Without a session the app shell would flash before the client redirects, so send visitors to sign-in first.
+      if ((url.pathname === "/" || url.pathname === "/index.html") && request.method === "GET" && !hasSessionCookie(request)) {
+        return redirect(request, "/entrar?redirect=%2F");
+      }
       const asset = await env.ASSETS.fetch(request);
       const headers = new Headers(asset.headers);
       for (const [name, value] of Object.entries(securityHeaders)) headers.set(name, value);

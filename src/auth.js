@@ -272,3 +272,8 @@ export function authResponseError(status) {
   if (status >= 500) return new AuthError(503, "A autenticação está temporariamente indisponível.");
   return new AuthError(401, "Não foi possível autenticar. Confira seus dados ou confirme seu e-mail.");
 }
+
+export function hasSessionCookie(request) {
+  const cookies = parseCookies(request);
+  return Boolean(cookies[ACCESS_COOKIE] || cookies[REFRESH_COOKIE]);
+}
