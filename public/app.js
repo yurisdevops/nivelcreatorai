@@ -2301,6 +2301,7 @@ async function loadAccount() {
       await loadHomeDashboard();
       await loadInstagramConnection();
       await loadNotifications();
+      if (data.profile.completed) window.maybeStartNivelTour?.();
       return;
     }
     document.querySelector('#current-workspace').textContent = 'Prévia do painel';
