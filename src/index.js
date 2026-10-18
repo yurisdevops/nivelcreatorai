@@ -33,7 +33,7 @@ const rateLimitedAuthPaths = new Set([
   "/api/auth/mfa/verify-login", "/api/auth/mfa/verify-enrollment", "/api/waitlist"
 ]);
 const rateLimitedAiPaths = new Set([
-  "/api/creative/generate", "/api/plans", "/api/plans/generate", "/api/agent/messages"
+  "/api/creative/generate", "/api/creative/ideas", "/api/plans", "/api/plans/generate", "/api/agent/messages"
 ]);
 
 async function enforceRateLimit(binding, key, description) {

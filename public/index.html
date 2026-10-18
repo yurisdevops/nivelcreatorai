@@ -64,11 +64,38 @@
           <footer class="footer-note"><span>✦</span> Você tem a palavra final em cada ideia, roteiro e publicação.</footer>
 
           <section class="studio-view" id="view-roteiros" hidden>
-            <div class="studio-heading"><div><p class="eyebrow">ESTÚDIO CRIATIVO</p><h1>Transforme sua ideia em roteiro.</h1><p class="intro">Briefings viram um primeiro rascunho para você revisar, ajustar e gravar.</p></div><div class="quota-card"><span class="quota-icon">✦</span><div><b id="quota-count">Carregando limite…</b><small id="quota-plan">Seu uso é privado ao seu espaço.</small></div></div></div>
-            <div class="studio-grid">
-              <form class="panel studio-form" id="creative-form"><label for="creative-brief">Sua ideia ou briefing</label><textarea id="creative-brief" name="brief" maxlength="1200" required placeholder="Ex.: Quero falar sobre como montar uma rotina simples de cuidados com a pele para quem tem pouco tempo."></textarea><div class="field-meta"><small>Inclua tema, público e o que quer transmitir.</small><small><span id="brief-count">0</span>/1200</small></div><label for="creative-format">Formato</label><select id="creative-format"><option>Reels (vídeo curto)</option><option>Stories</option><option>TikTok</option><option>Shorts</option></select><button class="button button-primary generate-button" id="generate-script"><span>✦</span> Gerar meu roteiro <span>→</span></button><p class="privacy-note">A IA cria um rascunho. Ela não publica conteúdo nem inventa resultados ou depoimentos.</p></form>
-              <div class="panel studio-results"><div class="panel-title"><div><p class="eyebrow">SEUS ROTEIROS</p><h2>Prontos para revisar</h2></div><span class="soft-icon">▤</span></div><div id="script-list" class="script-list"><div class="script-empty"><span>✧</span><b>Seu próximo roteiro começa com uma ideia.</b><p>Preencha o briefing ao lado para criar um rascunho personalizado.</p></div></div></div>
+            <div class="studio-heading"><div><p class="eyebrow">ESTÚDIO CRIATIVO</p><h1>Estúdio Criativo</h1><p class="intro">Gere ideias de conteúdo e roteiros escritos com a sua voz e a sua opinião.</p></div><div class="quota-card"><span class="quota-icon">✦</span><div><b id="quota-count">Carregando limite…</b><small id="quota-plan">Seu uso é privado ao seu espaço.</small></div></div></div>
+            <div class="studio-bar panel">
+              <div class="studio-bar-item"><span class="bar-icon">◎</span><div><small>Seu nicho</small><b id="studio-niche">Complete seu perfil</b></div></div>
+              <label class="studio-bar-item"><span class="bar-icon">▮</span><div><small>Seu objetivo</small><select id="studio-objective"><option>Aumentar o engajamento</option><option>Ganhar seguidores</option><option>Mostrar meu trabalho para marcas</option><option>Vender um produto</option><option>Ter mais consistência</option></select></div></label>
+              <label class="studio-bar-item"><span class="bar-icon">▶</span><div><small>Formato de conteúdo</small><select id="creative-format"><option>Reels (vídeo curto)</option><option>Stories</option><option>TikTok</option><option>Shorts</option></select></div></label>
             </div>
+            <div class="studio-layout">
+              <form class="panel studio-form" id="idea-form">
+                <div class="panel-title"><div><h2>✦ Pedido rápido</h2><p class="privacy-note">Descreva o que você precisa e a IA sugere 3 ideias.</p></div></div>
+                <textarea id="idea-request" maxlength="500" rows="5" placeholder="Ex.: quero 3 ideias de Reels para skincare"></textarea>
+                <div class="field-meta"><small>Opcional: sem pedido, a IA usa seu nicho e objetivo.</small><small><span id="idea-count">0</span>/500</small></div>
+                <button class="button button-primary generate-button" id="generate-ideas" type="submit"><span>✦</span> Gerar ideias agora <span>→</span></button>
+                <p class="examples-label">Exemplos de pedidos:</p>
+                <div class="example-chips"><button type="button" class="example-chip">3 ideias de Reels para o meu nicho</button><button type="button" class="example-chip">Conteúdos educativos para iniciantes</button><button type="button" class="example-chip">Ideias de stories para engajar</button><button type="button" class="example-chip">Roteiros para mostrar um produto que eu uso</button></div>
+              </form>
+              <div class="studio-center">
+                <section class="panel"><div class="panel-title"><div><h2>💡 Ideias sugeridas pela IA</h2><p class="privacy-note">Personalizadas para o seu nicho e objetivo.</p></div></div><div id="idea-grid" class="idea-results"><div class="script-empty compact"><span>💡</span><b>Suas ideias aparecem aqui.</b><p>Use o pedido rápido ao lado.</p></div></div></section>
+                <section class="panel" id="selected-script-panel"><div class="panel-title"><div><h2>▤ Roteiro selecionado</h2><p class="privacy-note" id="selected-script-title">Escolha uma ideia e clique em "Ver roteiro".</p></div><button class="button button-outline" id="copy-script" type="button" disabled>Copiar roteiro</button></div><div id="selected-script" class="script-steps"></div></section>
+              </div>
+              <div class="studio-side">
+                <section class="panel"><div class="panel-title"><h2>Por que a IA sugeriu isso?</h2></div><div id="idea-why" class="why-list"><p class="privacy-note">As justificativas das ideias aparecem aqui.</p></div></section>
+                <form class="panel studio-form" id="campaign-script-form">
+                  <div class="panel-title"><div><h2>◇ Roteiro de campanha</h2><p class="privacy-note">Escrito a partir da <b>sua opinião</b> sobre o produto. Nunca um roteiro padrão.</p></div></div>
+                  <label for="script-campaign">Campanha</label><select id="script-campaign"><option value="">Carregando campanhas…</option></select>
+                  <label for="opinion-liked">Do que você gostou no produto?</label><textarea id="opinion-liked" maxlength="600" rows="2" placeholder="Ex.: a textura é leve e não deixou minha pele oleosa"></textarea>
+                  <label for="opinion-disliked">Do que não gostou ou faria diferente?</label><textarea id="opinion-disliked" maxlength="600" rows="2" placeholder="Ex.: o cheiro é forte nos primeiros minutos"></textarea>
+                  <label for="opinion-experience">Como foi usar no seu dia a dia?</label><textarea id="opinion-experience" maxlength="800" rows="2" placeholder="Ex.: usei por 10 dias de manhã, antes da maquiagem"></textarea>
+                  <button class="button button-primary generate-button" id="generate-campaign-script" type="submit"><span>✦</span> Gerar roteiro da campanha <span>→</span></button>
+                </form>
+              </div>
+            </div>
+            <section class="panel studio-results"><div class="panel-title"><div><p class="eyebrow">SEUS ROTEIROS</p><h2>Salvos para revisar</h2></div><span class="soft-icon">▤</span></div><div id="script-list" class="script-list"><div class="script-empty"><span>✧</span><b>Seu próximo roteiro começa com uma ideia.</b><p>Gere ideias ou um roteiro de campanha acima.</p></div></div></section>
           </section>
 
           <section class="studio-view" id="view-calendario" hidden>

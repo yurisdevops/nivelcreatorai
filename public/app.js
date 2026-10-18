@@ -285,7 +285,7 @@ function showModule(name) {
   const labels = { roteiros: 'Estúdio Criativo', diagnostico: 'Diagnóstico IA', planejamento: 'Planejamento', calendario: 'Calendário', biblioteca: 'Biblioteca', resultados: 'Seus resultados', campanhas: 'Campanhas UGC', agente: 'Agente pessoal', configuracoes: 'Configurações' };
   document.querySelector('.crumb').innerHTML = `Seu espaço <span>/</span> ${labels[name]}`;
   if (moduleLoaded[name]) return;
-  if (name === 'roteiros') loadScripts();
+  if (name === 'roteiros') { loadScripts(); loadScriptCampaigns(); }
   if (name === 'diagnostico') loadDiagnostics();
   if (name === 'planejamento') loadPlans();
   if (name === 'calendario') loadCalendar();
@@ -403,7 +403,7 @@ function renderScripts(scripts) {
   if (!scripts.length) {
     const empty = document.createElement('div');
     empty.className = 'script-empty';
-    empty.innerHTML = '<span>✧</span><b>Seu próximo roteiro começa com uma ideia.</b><p>Preencha o briefing ao lado para criar um rascunho personalizado.</p>';
+    empty.innerHTML = '<span>✧</span><b>Seu próximo roteiro começa com uma ideia.</b><p>Gere ideias ou um roteiro de campanha acima.</p>';
     list.append(empty);
     return;
   }
@@ -412,7 +412,7 @@ function renderScripts(scripts) {
     card.className = 'script-card';
     const badge = document.createElement('span');
     badge.className = 'script-badge';
-    badge.textContent = `${script.format} · Rascunho`;
+    badge.textContent = script.campaign ? `${script.format} · ${script.campaign.brand}` : `${script.format} · Rascunho`;
     const title = document.createElement('h3');
     title.textContent = script.title;
     const hookLabel = document.createElement('b');
@@ -434,6 +434,8 @@ function renderScripts(scripts) {
     const caption = document.createElement('p');
     caption.textContent = script.caption;
     card.append(badge, title, hookLabel, hook, scenesTitle, scenes, cta, captionTitle, caption);
+    title.tabIndex = 0;
+    title.addEventListener('click', () => renderSelectedScript(script));
     if (Array.isArray(script.checklist) && script.checklist.length) {
       const checklistTitle = document.createElement('b');
       checklistTitle.textContent = 'Checklist de gravação';
@@ -575,29 +577,199 @@ document.querySelector('#run-diagnostic').addEventListener('click', async () => 
   finally { button.textContent = 'Gerar diagnóstico →'; button.disabled = false; }
 });
 
-const briefInput = document.querySelector('#creative-brief');
-briefInput.addEventListener('input', () => { document.querySelector('#brief-count').textContent = briefInput.value.length; });
-document.querySelector('#creative-form').addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const button = document.querySelector('#generate-script');
-  button.disabled = true;
-  button.textContent = 'Criando seu roteiro…';
+const ideaInput = document.querySelector('#idea-request');
+const ideaColors = ['coral', 'lilac', 'lime'];
+let selectedScript = null;
+
+ideaInput.addEventListener('input', () => { document.querySelector('#idea-count').textContent = ideaInput.value.length; });
+document.querySelectorAll('.example-chip').forEach((chip) => chip.addEventListener('click', () => {
+  ideaInput.value = chip.textContent;
+  document.querySelector('#idea-count').textContent = ideaInput.value.length;
+  ideaInput.focus();
+}));
+
+async function postCreative(path, body) {
+  const result = await fetch(path, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await result.json().catch(() => ({}));
+  if (result.status === 401) { location.href = '/entrar.html?redirect=%2F'; return null; }
+  if (!result.ok) throw new Error(data.error || 'Não foi possível concluir a geração.');
+  return data;
+}
+
+function setBusy(button, busy, label) {
+  button.disabled = busy;
+  if (busy) button.textContent = label;
+  else button.innerHTML = label;
+}
+
+function renderIdeas(ideas) {
+  const grid = document.querySelector('#idea-grid');
+  const why = document.querySelector('#idea-why');
+  grid.replaceChildren();
+  why.replaceChildren();
+  ideas.forEach((idea, index) => {
+    const card = document.createElement('article');
+    card.className = 'idea-result';
+    const number = document.createElement('span');
+    number.className = `idea-number ${ideaColors[index % ideaColors.length]}`;
+    number.textContent = String(index + 1);
+    const title = document.createElement('h3');
+    title.textContent = idea.title;
+    const description = document.createElement('p');
+    description.textContent = idea.description;
+    const tags = document.createElement('div');
+    tags.className = 'idea-tags';
+    for (const tag of idea.tags) {
+      const chip = document.createElement('span');
+      chip.textContent = tag;
+      tags.append(chip);
+    }
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'button button-outline';
+    button.innerHTML = 'Ver roteiro <span>→</span>';
+    button.addEventListener('click', () => generateScriptFromIdea(idea, button));
+    card.append(number, title, description, tags, button);
+    grid.append(card);
+    const reason = document.createElement('div');
+    reason.className = 'why-item';
+    const label = document.createElement('b');
+    label.textContent = `Ideia ${index + 1}`;
+    const text = document.createElement('p');
+    text.textContent = idea.why;
+    reason.append(label, text);
+    why.append(reason);
+  });
+}
+
+function renderSelectedScript(script) {
+  selectedScript = script;
+  const box = document.querySelector('#selected-script');
+  box.replaceChildren();
+  document.querySelector('#selected-script-title').textContent = script.campaign
+    ? `${script.title} · ${script.campaign.brand}`
+    : script.title;
+  document.querySelector('#copy-script').disabled = false;
+  const steps = [
+    ['1', 'Hook', [script.hook]],
+    ['2', 'Desenvolvimento', (script.scenes || []).map((scene) => `${scene.moment}: ${scene.speech}`)],
+    ['3', 'CTA', [script.cta]]
+  ];
+  for (const [number, label, lines] of steps) {
+    const step = document.createElement('article');
+    step.className = 'script-step';
+    const heading = document.createElement('b');
+    heading.textContent = `${number} · ${label}`;
+    step.append(heading);
+    const list = document.createElement(lines.length > 1 ? 'ul' : 'div');
+    for (const line of lines) {
+      const item = document.createElement(lines.length > 1 ? 'li' : 'p');
+      item.textContent = line;
+      list.append(item);
+    }
+    step.append(list);
+    box.append(step);
+  }
+}
+
+function scriptAsText(script) {
+  const scenes = (script.scenes || []).map((scene, index) => `${index + 1}. ${scene.moment}\n   Visual: ${scene.visual}\n   Fala: ${scene.speech}`).join('\n');
+  return `${script.title}\n\nHOOK\n${script.hook}\n\nCENAS\n${scenes}\n\nCTA\n${script.cta}\n\nLEGENDA\n${script.caption}\n${(script.hashtags || []).join(' ')}`;
+}
+
+document.querySelector('#copy-script').addEventListener('click', async () => {
+  if (!selectedScript) return;
   try {
-    const result = await fetch('/api/creative/generate', {
-      method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ brief: briefInput.value, format: document.querySelector('#creative-format').value })
+    await navigator.clipboard.writeText(scriptAsText(selectedScript));
+    announce('Roteiro copiado.');
+  } catch { announce('Não foi possível copiar. Selecione o texto manualmente.'); }
+});
+
+document.querySelector('#idea-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const button = document.querySelector('#generate-ideas');
+  setBusy(button, true, 'Pensando em ideias…');
+  try {
+    const data = await postCreative('/api/creative/ideas', {
+      request: ideaInput.value, format: document.querySelector('#creative-format').value,
+      objective: document.querySelector('#studio-objective').value
     });
-    const data = await result.json();
-    if (result.status === 401) { location.href = '/entrar.html?redirect=%2F'; return; }
-    if (!result.ok) throw new Error(data.error || 'Não foi possível gerar o roteiro.');
-    moduleLoaded.roteiros = false;
+    if (data) renderIdeas(data.ideas);
+  } catch (error) {
+    announce(error.message || 'Não foi possível gerar ideias.');
+  } finally {
+    setBusy(button, false, '<span>✦</span> Gerar ideias agora <span>→</span>');
+  }
+});
+
+async function generateScriptFromIdea(idea, button) {
+  setBusy(button, true, 'Escrevendo…');
+  try {
+    const brief = `${idea.title}. ${idea.description} Objetivo: ${document.querySelector('#studio-objective').value}.`.slice(0, 1200);
+    const data = await postCreative('/api/creative/generate', { brief, format: document.querySelector('#creative-format').value });
+    if (!data) return;
+    renderSelectedScript(data.script);
     announce('Roteiro salvo no seu espaço para revisão.');
+    moduleLoaded.roteiros = false;
     await loadScripts();
   } catch (error) {
     announce(error.message || 'Não foi possível gerar o roteiro.');
   } finally {
-    button.disabled = false;
-    button.innerHTML = '<span>✦</span> Gerar meu roteiro <span>→</span>';
+    setBusy(button, false, 'Ver roteiro <span>→</span>');
+  }
+}
+
+async function loadScriptCampaigns() {
+  const select = document.querySelector('#script-campaign');
+  try {
+    const result = await fetch('/api/campaigns', { credentials: 'same-origin' });
+    const data = await result.json();
+    if (!result.ok) throw new Error();
+    select.replaceChildren();
+    const usable = data.campaigns.filter((item) => !['archived', 'completed'].includes(item.status));
+    if (!usable.length) {
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = 'Cadastre uma campanha primeiro';
+      select.append(option);
+      return;
+    }
+    for (const campaign of usable) {
+      const option = document.createElement('option');
+      option.value = campaign.id;
+      option.textContent = `${campaign.brand_name} · ${campaign.title}`;
+      select.append(option);
+    }
+  } catch {
+    select.replaceChildren(Object.assign(document.createElement('option'), { value: '', textContent: 'Não foi possível carregar' }));
+  }
+}
+
+document.querySelector('#campaign-script-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const campaignId = document.querySelector('#script-campaign').value;
+  if (!campaignId) { announce('Cadastre ou escolha uma campanha primeiro.'); return; }
+  const button = document.querySelector('#generate-campaign-script');
+  setBusy(button, true, 'Escrevendo com a sua opinião…');
+  try {
+    const data = await postCreative('/api/creative/generate', {
+      campaign_id: campaignId, format: document.querySelector('#creative-format').value,
+      opinion: {
+        liked: document.querySelector('#opinion-liked').value,
+        disliked: document.querySelector('#opinion-disliked').value,
+        experience: document.querySelector('#opinion-experience').value
+      }
+    });
+    if (!data) return;
+    renderSelectedScript(data.script);
+    document.querySelector('#selected-script-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    announce('Roteiro da campanha salvo para revisão.');
+    moduleLoaded.roteiros = false;
+    await loadScripts();
+  } catch (error) {
+    announce(error.message || 'Não foi possível gerar o roteiro.');
+  } finally {
+    setBusy(button, false, '<span>✦</span> Gerar roteiro da campanha <span>→</span>');
   }
 });
 
@@ -1747,6 +1919,7 @@ async function loadAccount() {
       document.querySelector('#logout').hidden = false;
       document.querySelector('.login-link').hidden = true;
       document.querySelector('#trial-badge').textContent = data.trial.status === 'trialing' ? 'Trial ativo' : 'Conta';
+      document.querySelector('#studio-niche').textContent = data.profile.niche || 'Complete seu perfil';
       if (data.profile.completed) {
         document.querySelector('#niche').value = data.profile.niche || '';
         document.querySelector('#voice').value = data.profile.voice || '';

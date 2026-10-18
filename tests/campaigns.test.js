@@ -53,3 +53,11 @@ test("invalid contact data and unknown stages are rejected", async () => {
   await assert.rejects(campaignsHandler(request("/api/campaigns", "POST", { brand_name: "A", title: "B", status: "won" }),
     { DB: db }, "/api/campaigns", account), AuthError);
 });
+
+test("campaign scripts are refused until the creator gives an opinion about the product", async () => {
+  const { creativeHandler } = await import("../src/creative.js");
+  const db = { prepare: () => ({ bind: () => ({ first: async () => ({ niche: "beleza", goals_json: "[]", voice: "natural", ai_data_consent_at: "2026-10-18" }) }) }) };
+  const body = { campaign_id: "11111111-1111-4111-8111-111111111111", format: "Reels (vídeo curto)", opinion: { liked: "bom" } };
+  await assert.rejects(creativeHandler(request("/api/creative/generate", "POST", body), { DB: db }, "/api/creative/generate", account),
+    (error) => error instanceof AuthError && error.status === 400 && error.code === "opinion_required");
+});
