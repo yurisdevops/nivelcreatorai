@@ -116,3 +116,5 @@ section h2 { margin: 0 0 22px; font-size: clamp(1.5rem, 3.6vw, 2.2rem); line-hei
   .top-cta { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+/* Legal pages */
+.legal{max-width:760px;padding:32px 0 60px}.legal h1{margin:0 0 18px;font-size:clamp(2rem,5vw,2.8rem);letter-spacing:-.03em}.legal h2{margin:32px 0 10px;font-size:1.25rem}.legal p,.legal li{color:var(--muted)}.legal b{color:var(--ink)}.legal ul{padding-left:20px}.legal li{margin-bottom:8px}.legal a,.foot a{color:var(--lilac);text-decoration:underline}
