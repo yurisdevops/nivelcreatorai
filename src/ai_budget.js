@@ -131,7 +131,8 @@ export async function requestGemini(env, model, payload, unavailableMessage) {
     console.error("ai_provider_error", { provider, model, status: response.status,
       reason: detail?.error?.status, message: String(detail?.error?.message || "").slice(0, 200) });
     await recordCircuitFailure(env, probeToken);
-    throw new AuthError(502, unavailableMessage);
+    // The provider's status code helps the creator report problems; it never contains the key or the prompt.
+    throw new AuthError(502, `${unavailableMessage} (código ${response.status}${detail?.error?.status ? ` ${detail.error.status}` : ""})`);
   }
   await recordCircuitSuccess(env, probeToken);
   return response;
