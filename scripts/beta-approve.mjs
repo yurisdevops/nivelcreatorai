@@ -1,6 +1,9 @@
 // Usage: npm run beta:aprovar -- pessoa@exemplo.com [outra@exemplo.com ...]
 // Approves e-mails for the closed beta in the remote D1, adding them to the waitlist when missing.
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const EMAIL = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/;
 const emails = process.argv.slice(2).map((value) => value.trim().toLowerCase());
@@ -16,7 +19,12 @@ const statements = emails.map((email) => `INSERT INTO waitlist_entries
   ON CONFLICT(email) DO UPDATE SET approved_at=COALESCE(approved_at, excluded.approved_at),
   updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now');`).join("\n");
 
-const result = spawnSync("npx", ["wrangler", "d1", "execute", "nivel-creator", "--remote", "--command", statements],
+// On Windows npx needs a shell, which would split an inline SQL argument, so the statements go through a file.
+const folder = mkdtempSync(join(tmpdir(), "nivel-beta-"));
+const file = join(folder, "approve.sql");
+writeFileSync(file, statements);
+const result = spawnSync("npx", ["wrangler", "d1", "execute", "nivel-creator", "--remote", "--yes", `--file=${file}`],
   { stdio: "inherit", shell: process.platform === "win32" });
+rmSync(folder, { recursive: true, force: true });
 if (result.status === 0) console.log(`Aprovado(s) para o beta: ${emails.join(", ")}`);
 process.exit(result.status ?? 1);
