@@ -17,6 +17,7 @@ import { accountDataHandler, processDeletionQueue } from "./account_data.js";
 import { billingHandler, processAsaasQueue, receiveAsaasWebhook, reconcileAsaasSubscriptions } from "./billing.js";
 import { instagramCallback, instagramHandler, refreshInstagramTokens, syncInstagramInsights } from "./instagram.js";
 import { filesHandler } from "./files.js";
+import { waitlistHandler } from "./waitlist.js";
 
 const securityHeaders = {
   "content-security-policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'",
@@ -29,7 +30,7 @@ const securityHeaders = {
 
 const rateLimitedAuthPaths = new Set([
   "/api/auth/signup", "/api/auth/login", "/api/auth/recover", "/api/auth/password",
-  "/api/auth/mfa/verify-login", "/api/auth/mfa/verify-enrollment"
+  "/api/auth/mfa/verify-login", "/api/auth/mfa/verify-enrollment", "/api/waitlist"
 ]);
 const rateLimitedAiPaths = new Set([
   "/api/creative/generate", "/api/plans", "/api/plans/generate", "/api/agent/messages"
@@ -292,6 +293,9 @@ export default {
         const clientIp = request.headers.get("cf-connecting-ip") || "unknown";
         await enforceRateLimit(env.MFA_RATE_LIMITER, `${url.pathname}:${clientIp}`, "a verificação do autenticador");
       }
+
+      const waitlist = await waitlistHandler(request, env, url.pathname);
+      if (waitlist) return response(waitlist);
 
       const auth = await authHandler(request, env, url.pathname);
       if (auth) return auth;

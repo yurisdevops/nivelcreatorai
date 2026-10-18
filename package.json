@@ -10,7 +10,8 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "db:local": "wrangler d1 migrations apply nivel-creator --local",
-    "test": "node --test"
+    "test": "node --test",
+    "waitlist:list": "wrangler d1 execute nivel-creator --remote --command \"SELECT created_at, name, email, instagram, niche, campaigns_per_month, founder_interest, biggest_pain, source FROM waitlist_entries ORDER BY created_at DESC\""
   },
   "devDependencies": {
     "@cloudflare/containers": "^0.3.7",
