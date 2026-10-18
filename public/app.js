@@ -2332,3 +2332,21 @@ document.querySelector('#logout').addEventListener('click', async () => {
     location.href = '/entrar.html';
   }
 });
+
+// Settings show one section at a time.
+const settingsPanels = {
+  'settings-profile-form': document.querySelector('#settings-profile-form'),
+  'mfa-settings-panel': document.querySelector('.mfa-settings-panel'),
+  'account-plan-panel': document.querySelector('.account-plan-panel'),
+  'data-rights-panel': document.querySelector('.data-rights-panel')
+};
+function showSettingsTab(key) {
+  Object.entries(settingsPanels).forEach(([name, panel]) => panel?.classList.toggle('settings-hidden', name !== key));
+  document.querySelectorAll('.settings-tab').forEach((tab) => {
+    const active = tab.dataset.settingsTab === key;
+    tab.classList.toggle('active', active);
+    tab.setAttribute('aria-selected', String(active));
+  });
+}
+document.querySelectorAll('.settings-tab').forEach((tab) => tab.addEventListener('click', () => showSettingsTab(tab.dataset.settingsTab)));
+showSettingsTab('settings-profile-form');
