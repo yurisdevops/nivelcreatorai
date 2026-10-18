@@ -4,8 +4,11 @@
   "main": "src/index.js",
   "compatibility_date": "2026-05-03",
   "vars": {
+    "GEMINI_PROVIDER": "vertex",
+    "GOOGLE_CLOUD_PROJECT": "project-38cc0da1-19e8-40bf-9f6",
+    "GOOGLE_CLOUD_LOCATION": "global",
     "DATA_RETENTION_ENABLED": "false",
-    "AI_DAILY_BUDGET_USD": "10",
+    "AI_DAILY_BUDGET_USD": "3",
     "GEMINI_INPUT_USD_PER_MILLION": "1.5",
     "GEMINI_OUTPUT_USD_PER_MILLION": "7.5"
   },

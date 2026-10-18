@@ -231,8 +231,24 @@ document.querySelector('#save-onboarding').addEventListener('click', () => {
   }).catch((error) => announce(error.message || 'Não foi possível salvar o perfil.'));
 });
 
-document.querySelector('#menu-toggle').addEventListener('click', () => {
-  document.querySelector('#sidebar').classList.toggle('open');
+const sidebar = document.querySelector('#sidebar');
+const menuToggle = document.querySelector('#menu-toggle');
+const mobileMore = document.querySelector('#mobile-more');
+const mobilePrimaryViews = new Set(['inicio', 'roteiros', 'planejamento', 'calendario']);
+function setSidebarOpen(open) {
+  sidebar.classList.toggle('open', open);
+  menuToggle.setAttribute('aria-expanded', String(open));
+  mobileMore.setAttribute('aria-expanded', String(open));
+}
+menuToggle.addEventListener('click', () => setSidebarOpen(!sidebar.classList.contains('open')));
+mobileMore.addEventListener('click', () => setSidebarOpen(!sidebar.classList.contains('open')));
+document.addEventListener('click', (event) => {
+  if (sidebar.classList.contains('open') && !sidebar.contains(event.target) && !menuToggle.contains(event.target) && !mobileMore.contains(event.target)) {
+    setSidebarOpen(false);
+  }
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && sidebar.classList.contains('open')) setSidebarOpen(false);
 });
 
 viewLinks.forEach((link) => link.addEventListener('click', (event) => {
@@ -249,10 +265,17 @@ viewLinks.forEach((link) => link.addEventListener('click', (event) => {
     event.preventDefault();
     announce('Esta área entra na próxima etapa do produto.');
   }
-  document.querySelector('#sidebar').classList.remove('open');
+  setSidebarOpen(false);
   if (link.classList.contains('nav-link')) {
     document.querySelectorAll('.nav-link[data-view]').forEach((item) => item.classList.toggle('active', item === link));
   }
+  document.querySelectorAll('.mobile-tab').forEach((item) => {
+    const active = item.dataset.view === view || (item.id === 'mobile-more' && !mobilePrimaryViews.has(view));
+    item.classList.toggle('active', active);
+    if (active && item.dataset.view) item.setAttribute('aria-current', 'page');
+    else item.removeAttribute('aria-current');
+  });
+  window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
 }));
 
 const moduleLoaded = { roteiros: false, diagnostico: false, planejamento: false, calendario: false, biblioteca: false, resultados: false, campanhas: false, agente: false, configuracoes: false };

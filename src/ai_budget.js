@@ -96,11 +96,28 @@ async function recordCircuitFailure(env, probeToken) {
 }
 
 export async function requestGemini(env, model, payload, unavailableMessage) {
-  const body = serializeAiRequest(payload);
+  const provider = env.GEMINI_PROVIDER || "gemini-api";
+  const vertex = provider === "vertex";
+  if (!env.GEMINI_API_KEY || (vertex && !env.GOOGLE_CLOUD_PROJECT)) {
+    throw new AuthError(503, "A integração de IA ainda não foi configurada corretamente.", "ai_provider_unconfigured");
+  }
+  if (!vertex && provider !== "gemini-api") {
+    throw new AuthError(503, "O provedor de IA configurado não é reconhecido.", "ai_provider_unconfigured");
+  }
+  const requestPayload = vertex ? {
+    ...payload,
+    generationConfig: payload?.generationConfig ? Object.fromEntries(
+      Object.entries(payload.generationConfig).filter(([key]) => key !== "temperature" && key !== "topP" && key !== "topK")
+    ) : undefined
+  } : payload;
+  const apiUrl = vertex
+    ? `https://aiplatform.googleapis.com/v1/projects/${encodeURIComponent(env.GOOGLE_CLOUD_PROJECT)}/locations/${encodeURIComponent(env.GOOGLE_CLOUD_LOCATION || "global")}/publishers/google/models/${encodeURIComponent(model)}:generateContent`
+    : `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+  const body = serializeAiRequest(requestPayload);
   const probeToken = await acquireCircuitProbe(env);
   let response;
   try {
-    response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+    response = await fetch(apiUrl, {
       method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
       body, redirect: "error", signal: AbortSignal.timeout(25000)
     });

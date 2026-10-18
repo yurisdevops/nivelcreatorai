@@ -3,7 +3,11 @@ SUPABASE_URL=https://SEU-PROJETO.supabase.co
 SUPABASE_ANON_KEY=sb_publishable_xxxxxxxxxxxxxxxxxxxxxxxxx
 # Optional, only for self-service account deletion. Keep this server-side; never use it in public/ files.
 SUPABASE_SECRET_KEY=
-GEMINI_API_KEY=COLOQUE_SUA_CHAVE_LOCAL
+# Chave API do Google Cloud restrita ao Vertex AI GenerateContent. Mantenha-a só no .dev.vars.
+GEMINI_API_KEY=COLOQUE_SUA_CHAVE_VERTEX_LOCAL
+GEMINI_PROVIDER=vertex
+GOOGLE_CLOUD_PROJECT=project-38cc0da1-19e8-40bf-9f6
+GOOGLE_CLOUD_LOCATION=global
 # Generate one random 32-byte secret and set it in both Workers.
 FILE_SCANNER_SECRET=
 # Roteador: tarefas simples usam Flash-Lite; roteiros/diagnósticos/planos usam o modelo complexo.
@@ -18,7 +22,7 @@ GEMINI_SIMPLE_OUTPUT_USD_PER_MILLION=2.50
 GEMINI_INPUT_USD_PER_MILLION=1.5
 GEMINI_OUTPUT_USD_PER_MILLION=7.5
 # Teto global diário e preço máximo por 1 milhão de tokens (USD).
-AI_DAILY_BUDGET_USD=10
+AI_DAILY_BUDGET_USD=3
 # Optional Asaas Sandbox credentials; never use a production key with this implementation.
 ASAAS_API_KEY=
 ASAAS_WEBHOOK_TOKEN=

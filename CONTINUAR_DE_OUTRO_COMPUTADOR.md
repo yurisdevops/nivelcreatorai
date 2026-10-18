@@ -2,6 +2,23 @@
 
 Este arquivo registra o ponto de parada para continuar o trabalho em outro computador. O Nivel Creator AI é um repositório separado; o projeto `landing-pages` não deve ser movido nem alterado para continuar esta implementação.
 
+## Estado verificado na retomada — 15/10/2026
+
+- A interface foi ajustada para uso prioritário em celulares: navegação inferior com atalhos, menu completo, alvos de toque maiores e ajustes para telas estreitas. A prévia local está acessível em `http://127.0.0.1:8789/`; ainda falta conferir em um telefone real.
+- `.dev.vars` existe e continua ignorado pelo Git. A URL aponta para o projeto Supabase deste produto e a chave local está no formato publishable. O provedor está configurado para Vertex AI; uma chave API restrita ao método `PredictionService.GenerateContent` foi criada e guardada somente em `.dev.vars`. As chamadas de geração ainda não foram exercitadas.
+- O Google Cloud CLI acessa a conta ativa `yuri.souza.ys@gmail.com`; ADC funciona, o projeto `project-38cc0da1-19e8-40bf-9f6` está ativo, tem faturamento vinculado e a API Vertex AI está habilitada. O saldo/crédito restante não foi consultado. O secret ainda não foi configurado no Worker Cloudflare e não houve deploy.
+- `FILE_SCANNER_SECRET` está preenchido em `.dev.vars` e `scanner/.dev.vars`, tem pelo menos 32 bytes e os dois valores coincidem. O terminal desta sessão não encontra `docker.exe` nem o executável do Docker Desktop nos caminhos usuais; ainda não foi possível construir/iniciar o scanner aqui.
+- O projeto Supabase `lonfsobzzwmzyqjdgrjx` está `ACTIVE_HEALTHY`. Com a sessão atual, `/api/auth/mfa/status` respondeu com sucesso e informou que não há MFA ativado nem exigência administrativa para este usuário. Não reproduzi a falha antiga de consulta de autenticação adicional. Confirmação de e-mail, callbacks e templates precisam ser conferidos no painel antes de aceitar novos usuários.
+- A conta Cloudflare conectada contém a D1 `nivel-creator` com as 15 migrações esperadas e o bucket `nivel-creator-private`. Os Workers `nivel-creator-ai` e `nivel-creator-file-scanner` ainda não aparecem publicados. O Wrangler 4.151.0 está instalado, mas a sessão CLI deste terminal não está autenticada; a conexão Cloudflare via MCP está ativa.
+- As credenciais locais de Meta/Instagram e Asaas sandbox ainda estão vazias. São integrações opcionais para o núcleo manual e para a experimentação com IA, mas necessárias para validar métricas reais, checkout e cobranças. Nenhum Worker foi publicado nesta retomada.
+
+### Próxima sequência recomendada
+
+1. Iniciar a sessão local do Wrangler e validar geração de roteiro, plano, diagnóstico e agente com o teto diário já configurado. Depois, configurar a chave como secret do Worker e publicar somente após revisar os demais itens de produção.
+2. Tornar o Docker CLI acessível ao terminal e iniciar o scanner; validar upload, bloqueio de arquivo infectado e falha segura quando o scanner não responder.
+3. Fazer o fluxo de cadastro/login/recuperação com um endereço controlado e confirmar no painel Supabase os templates e URLs para o domínio escolhido.
+4. Somente depois, com as credenciais correspondentes, validar Meta e Asaas sandbox. Fazer revisão de backup restaurável, custos de Containers, retenção/LGPD, observabilidade e domínio/redirects antes de abrir beta ou produção.
+
 ## Estado no momento da passagem
 
 - Repositório: `https://github.com/yurisdevops/nivelcreatorai.git`
@@ -9,7 +26,7 @@ Este arquivo registra o ponto de parada para continuar o trabalho em outro compu
 - Commit imediatamente anterior a este documento: `f6b4c15` (`Document Supabase project provisioning status`). Este arquivo será enviado em um commit seguinte.
 - O push desse commit foi concluído. A pasta de trabalho estava limpa depois do envio.
 - Supabase: projeto `Nivel Creator AI`, organização `gruponivel`, região São Paulo (`sa-east-1`), plano Free. URL: `https://lonfsobzzwmzyqjdgrjx.supabase.co`.
-- Supabase Auth ainda precisa de configuração: confirmação de e-mail, URL de callback local, MFA TOTP e templates de confirmação/recuperação.
+- Antes de aceitar novos usuários, conferir no painel do Supabase a confirmação de e-mail, as URLs de callback, a verificação TOTP e os templates de confirmação/recuperação; o estado de MFA da sessão local foi validado na retomada abaixo.
 - A Data API do Supabase foi deixada desativada: os dados da aplicação ficam na D1; o Supabase é usado para Auth.
 - D1 `nivel-creator` e R2 privado `nivel-creator-private` existem na Cloudflare. As 15 migrações D1 remotas foram verificadas.
 - Worker principal e Worker scanner ainda não foram publicados. O scanner usa Cloudflare Containers `standard-1` e precisa de Docker ou ambiente compatível; confirme o plano/custos antes de publicar.

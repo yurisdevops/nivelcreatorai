@@ -47,9 +47,8 @@ test("expired access token refreshes only through Supabase and rotates HttpOnly 
     if (parsed.pathname === "/auth/v1/user") return response({ message: "expired" }, 401);
     if (parsed.pathname === "/auth/v1/token") return response({
       access_token: freshAccessToken, refresh_token: "rotated-refresh", expires_in: 3600,
-      user: { id: "creator-a", email: "a@example.com", email_confirmed_at: "2026-10-15T12:00:00Z" }
+      user: { id: "creator-a", email: "a@example.com", email_confirmed_at: "2026-10-15T12:00:00Z", factors: [] }
     });
-    if (parsed.pathname === "/auth/v1/factors") return response({ totp: [] });
     throw new Error(`Unexpected auth request: ${parsed.pathname}`);
   }, async () => {
     const session = await requireUser(sessionRequest({ refreshToken: "old-refresh" }), env());
@@ -60,8 +59,7 @@ test("expired access token refreshes only through Supabase and rotates HttpOnly 
   });
   assert.deepEqual(calls, [
     "GET /auth/v1/user",
-    "POST /auth/v1/token?grant_type=refresh_token",
-    "GET /auth/v1/factors"
+    "POST /auth/v1/token?grant_type=refresh_token"
   ]);
 });
 
@@ -80,8 +78,8 @@ test("a revoked refresh token is rejected without returning a session", async ()
 test("a verified TOTP factor requires an AAL2 session for private APIs", async () => {
   await withMockAuth(async (url) => {
     const parsed = new URL(url);
-    if (parsed.pathname === "/auth/v1/user") return response({ id: "creator-a", email_confirmed_at: "2026-10-15T12:00:00Z" });
-    if (parsed.pathname === "/auth/v1/factors") return response({ totp: [{ id: "totp-a", status: "verified" }] });
+    if (parsed.pathname === "/auth/v1/user") return response({ id: "creator-a", email_confirmed_at: "2026-10-15T12:00:00Z",
+      factors: [{ id: "totp-a", factor_type: "totp", status: "verified" }] });
     throw new Error(`Unexpected auth request: ${parsed.pathname}`);
   }, async () => {
     await assert.rejects(requireUser(sessionRequest(), env()),
@@ -93,7 +91,6 @@ test("admin membership without TOTP is denied until MFA enrollment", async () =>
   await withMockAuth(async (url) => {
     const parsed = new URL(url);
     if (parsed.pathname === "/auth/v1/user") return response({ id: "admin-a", email_confirmed_at: "2026-10-15T12:00:00Z" });
-    if (parsed.pathname === "/auth/v1/factors") return response({ totp: [] });
     throw new Error(`Unexpected auth request: ${parsed.pathname}`);
   }, async () => {
     await assert.rejects(requireUser(sessionRequest(), env(true)),

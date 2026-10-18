@@ -3,11 +3,49 @@ const message = document.querySelector('#form-message');
 const submit = document.querySelector('#submit-button');
 const loginTab = document.querySelector('#login-tab');
 const signupTab = document.querySelector('#signup-tab');
+const presentation = document.querySelector('#presentation');
+const accessScreen = document.querySelector('#access-screen');
 let mode = 'login';
 let ready = false;
 let mfaRequired = false;
 let mfaEnrollmentRequired = false;
 let enrollmentFactorId = '';
+let selectedPlan = 'trial';
+
+function updatePlanSelection() {
+  const note = document.querySelector('#selected-plan-note');
+  const title = document.querySelector('#selected-plan-name');
+  const intro = document.querySelector('#auth-intro');
+  const showPlan = mode === 'signup';
+  note.hidden = !showPlan;
+  if (selectedPlan === 'pro') {
+    title.textContent = 'Pro · R$ 29,90 por mês';
+    intro.textContent = 'Crie seu acesso. Depois da confirmação do e-mail, você pode revisar e confirmar o checkout Pro.';
+  } else {
+    title.textContent = 'Trial grátis · R$ 0 por 7 dias';
+    intro.textContent = showPlan
+      ? 'Crie seu acesso para começar. O trial é ativado após a confirmação do e-mail.'
+      : 'Acesse suas ideias, roteiros e planejamento em um só lugar.';
+  }
+  if (mode === 'recover') intro.textContent = 'Informe seu e-mail e enviaremos instruções para recuperar o acesso.';
+  if (mode === 'reset') intro.textContent = 'Escolha uma nova senha para voltar ao seu espaço.';
+}
+
+function showAccess(nextMode = 'login', plan = selectedPlan) {
+  selectedPlan = plan === 'pro' ? 'pro' : 'trial';
+  presentation.hidden = true;
+  accessScreen.hidden = false;
+  setMode(nextMode);
+  updatePlanSelection();
+  window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+}
+
+function showPresentation() {
+  accessScreen.hidden = true;
+  presentation.hidden = false;
+  history.replaceState(null, '', `${location.pathname}${location.search}`);
+  window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+}
 
 function showMfaLogin(factors) {
   mfaRequired = true;
@@ -29,7 +67,7 @@ function showMfaLogin(factors) {
     return option;
   }));
   document.querySelector('#auth-title').textContent = 'Confirme sua identidade.';
-  document.querySelector('.auth-intro').textContent = 'Digite o código temporário do seu aplicativo autenticador.';
+  document.querySelector('#auth-intro').textContent = 'Digite o código temporário do seu aplicativo autenticador.';
   submit.innerHTML = 'Confirmar código <span>→</span>';
   document.querySelector('#mfa-login-code').required = true;
   document.querySelector('#mfa-login-code').focus();
@@ -50,7 +88,7 @@ function showMfaEnrollment() {
   document.querySelector('#mfa-enroll-group').hidden = false;
   document.querySelector('#mfa-enroll-code').required = true;
   document.querySelector('#auth-title').textContent = 'Proteja sua conta.';
-  document.querySelector('.auth-intro').textContent = 'Ative um autenticador TOTP para continuar como administrador.';
+  document.querySelector('#auth-intro').textContent = 'Ative um autenticador TOTP para continuar como administrador.';
   submit.innerHTML = 'Ativar autenticador <span>→</span>';
 }
 
@@ -78,7 +116,8 @@ function setMode(nextMode) {
   loginTab.setAttribute('aria-selected', String(!signup));
   signupTab.setAttribute('aria-selected', String(signup));
   document.querySelector('.auth-tabs').hidden = recoveryRequest || passwordReset;
-  document.querySelector('#auth-title').textContent = signup ? 'Crie seu espaço.' : recoveryRequest ? 'Recupere seu acesso.' : passwordReset ? 'Defina uma nova senha.' : 'Entre no seu ritmo.';
+  document.querySelector('#auth-title').textContent = signup ? 'Seu próximo passo começa aqui.' : recoveryRequest ? 'Recupere seu acesso.' : passwordReset ? 'Defina uma nova senha.' : 'Acesse seu espaço.';
+  updatePlanSelection();
   submit.innerHTML = signup ? 'Criar minha conta <span>→</span>' : recoveryRequest ? 'Enviar link de recuperação <span>→</span>' : passwordReset ? 'Salvar nova senha <span>→</span>' : 'Entrar <span>→</span>';
   document.querySelector('#password').autocomplete = signup || passwordReset ? 'new-password' : 'current-password';
   document.querySelector('#password').hidden = recoveryRequest;
@@ -92,6 +131,18 @@ function setMode(nextMode) {
 
 loginTab.addEventListener('click', () => setMode('login'));
 signupTab.addEventListener('click', () => setMode('signup'));
+document.querySelector('#header-login-link').addEventListener('click', (event) => {
+  event.preventDefault();
+  showAccess('login');
+  window.setTimeout(() => document.querySelector('#email').focus({ preventScroll: true }), 350);
+});
+document.querySelector('#back-to-presentation').addEventListener('click', showPresentation);
+document.querySelectorAll('[data-select-plan]').forEach((button) => {
+  button.addEventListener('click', () => {
+    showAccess('signup', button.dataset.selectPlan);
+    window.setTimeout(() => document.querySelector('#email').focus({ preventScroll: true }), 350);
+  });
+});
 document.querySelector('#forgot-password').addEventListener('click', () => setMode('recover'));
 document.querySelector('#mfa-cancel').addEventListener('click', async () => {
   await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin',
@@ -126,12 +177,23 @@ document.querySelector('#mfa-enroll-start').addEventListener('click', async (eve
 });
 
 const query = new URLSearchParams(location.search);
-if (query.has('verificado')) message.textContent = 'E-mail confirmado. Agora entre com sua senha.';
-if (query.has('redefinir')) setMode('reset');
-if (query.get('senha') === 'atualizada') message.textContent = 'Senha atualizada. Entre com sua nova senha.';
-if (query.get('erro') === 'confirmacao') message.textContent = 'O link não funcionou ou expirou. Solicite uma nova confirmação.';
-if (query.get('erro') === 'redefinicao') message.textContent = 'O link de recuperação expirou ou não foi concluído. Solicite outro link.';
-if (query.get('erro') === 'configuracao') message.textContent = 'A autenticação ainda não está configurada neste ambiente.';
+if (query.has('redefinir')) showAccess('reset');
+else if (query.has('verificado')) {
+  showAccess('login');
+  message.textContent = 'E-mail confirmado. Agora entre com sua senha.';
+} else if (query.get('senha') === 'atualizada') {
+  showAccess('login');
+  message.textContent = 'Senha atualizada. Entre com sua nova senha.';
+} else if (query.get('erro') === 'confirmacao') {
+  showAccess('login');
+  message.textContent = 'O link não funcionou ou expirou. Solicite uma nova confirmação.';
+} else if (query.get('erro') === 'redefinicao') {
+  showAccess('login');
+  message.textContent = 'O link de recuperação expirou ou não foi concluído. Solicite outro link.';
+} else if (query.get('erro') === 'configuracao') {
+  showAccess('login');
+  message.textContent = 'A autenticação ainda não está configurada neste ambiente.';
+}
 
 fetch('/api/auth/status', { credentials: 'same-origin' }).then(async (result) => {
   const status = await result.json();
@@ -144,8 +206,8 @@ fetch('/api/auth/status', { credentials: 'same-origin' }).then(async (result) =>
     fetch('/api/auth/mfa/status', { credentials: 'same-origin' }).then(async (result) => {
       if (!result.ok) return;
       const mfa = await result.json();
-      if (mfa.enroll_required) showMfaEnrollment();
-      else if (mfa.required) showMfaLogin(mfa.factors);
+      if (mfa.enroll_required) { showAccess('login'); showMfaEnrollment(); }
+      else if (mfa.required) { showAccess('login'); showMfaLogin(mfa.factors); }
     }).catch(() => {});
   }
 }).catch(() => {
@@ -221,7 +283,9 @@ form.addEventListener('submit', async (event) => {
       return;
     }
     if (mode === 'signup' && data.verification_required) {
-      message.textContent = 'Conta criada. Confira seu e-mail para confirmar o endereço e iniciar seu trial.';
+      message.textContent = selectedPlan === 'pro'
+        ? 'Conta criada. Confirme seu e-mail para iniciar o trial de 7 dias. Depois, você poderá revisar e confirmar o plano Pro em Configurações.'
+        : 'Conta criada. Confira seu e-mail para confirmar o endereço e iniciar seu trial grátis de 7 dias.';
       form.reset();
       return;
     }

@@ -27,20 +27,27 @@ async function authFetch(env, path, { method = "GET", body, accessToken } = {}) 
   const headers = new Headers({ apikey: env.SUPABASE_ANON_KEY, accept: "application/json" });
   if (body !== undefined) headers.set("content-type", "application/json");
   if (accessToken) headers.set("authorization", `Bearer ${accessToken}`);
-  return fetch(`${baseUrl(env)}${path}`, {
+  const result = await fetch(`${baseUrl(env)}${path}`, {
     method,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
-    redirect: "error",
+    redirect: "manual",
     signal: AbortSignal.timeout(8000)
   });
+  if (result.status >= 300 && result.status < 400) {
+    throw new AuthError(503, "A autenticação retornou um redirecionamento inesperado.");
+  }
+  return result;
 }
 
-async function listMfaFactors(env, accessToken) {
-  const result = await authFetch(env, "/auth/v1/factors", { accessToken });
-  if (!result.ok) throw new AuthError(503, "Não foi possível consultar a configuração de autenticação adicional.");
-  const data = await result.json();
-  return Array.isArray(data.totp) ? data.totp : [];
+async function listMfaFactors(env, accessToken, knownUser) {
+  // Supabase's supported client flow reads factors from the authenticated
+  // user's profile. The Auth factors route does not support GET, and this app
+  // intentionally keeps the Supabase Data API disabled. Pending factors stay in
+  // the list so the settings screen can offer to finish or remove them.
+  const user = knownUser || await getUser(env, accessToken);
+  const factors = Array.isArray(user?.factors) ? user.factors : [];
+  return factors.filter((factor) => factor.factor_type === "totp");
 }
 
 // getUser validates the signature and session with Supabase Auth before claims are read here.
@@ -153,7 +160,7 @@ export async function requireUser(request, env, { allowMfaPending = false } = {}
   if (accessToken) {
     const user = await getUser(env, accessToken);
     if (user?.id && user.email_confirmed_at) {
-      const mfaFactors = await listMfaFactors(env, accessToken);
+      const mfaFactors = await listMfaFactors(env, accessToken, user);
       const verifiedFactors = mfaFactors.filter((factor) => factor.status === "verified");
       const assuranceLevel = validatedAssuranceLevel(accessToken);
       const adminMfaRequired = await requiresAdminMfa(env, user.id);
@@ -170,7 +177,7 @@ export async function requireUser(request, env, { allowMfaPending = false } = {}
   if (!response.ok) throw authResponseError(response.status);
   const session = await response.json();
   if (!session?.user?.id || !session.user.email_confirmed_at) throw new AuthError();
-  const mfaFactors = await listMfaFactors(env, session.access_token);
+  const mfaFactors = await listMfaFactors(env, session.access_token, session.user);
   const verifiedFactors = mfaFactors.filter((factor) => factor.status === "verified");
   const assuranceLevel = validatedAssuranceLevel(session.access_token);
   const adminMfaRequired = await requiresAdminMfa(env, session.user.id);

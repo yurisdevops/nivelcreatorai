@@ -9,7 +9,7 @@ test("Pix checkout creates one detached payment and no recurring authorization",
   assert.deepEqual(payload.chargeTypes, ["DETACHED"]);
   assert.equal(payload.subscription, undefined);
   assert.match(payload.callback.successUrl, /pix-aguardando-webhook/);
-  assert.equal(payload.items[0].value, 59.9);
+  assert.equal(payload.items[0].value, 29.9);
   assert.match(payload.items[0].description, /avulso/);
 });
 
@@ -22,14 +22,14 @@ test("card checkout remains monthly and recurring", () => {
   assert.match(payload.callback.successUrl, /pagamento=aguardando-webhook/);
 });
 
-test("only a paid Pix detached checkout for exactly R$ 59,90 is accepted", () => {
-  const valid = { status: "PAID", billingTypes: ["PIX"], chargeTypes: ["DETACHED"], items: [{ value: 59.9, quantity: 1 }] };
+test("only a paid Pix detached checkout for exactly R$ 29,90 is accepted", () => {
+  const valid = { status: "PAID", billingTypes: ["PIX"], chargeTypes: ["DETACHED"], items: [{ value: 29.9, quantity: 1 }] };
   assert.equal(validPixCheckoutPayment(valid), true);
   assert.equal(validPixCheckoutPayment({ ...valid, billingTypes: ["CREDIT_CARD"] }), false);
   assert.equal(validPixCheckoutPayment({ ...valid, chargeTypes: ["RECURRENT"] }), false);
-  assert.equal(validPixCheckoutPayment({ ...valid, items: [{ value: 59.89, quantity: 1 }] }), false);
-  assert.equal(validPixCheckoutPayment({ ...valid, items: [{ value: 5.99, quantity: 10 }] }), true);
-  assert.equal(validPixCheckoutPayment({ ...valid, items: [{ value: 59.9, quantity: 0 }] }), false);
+  assert.equal(validPixCheckoutPayment({ ...valid, items: [{ value: 29.89, quantity: 1 }] }), false);
+  assert.equal(validPixCheckoutPayment({ ...valid, items: [{ value: 2.99, quantity: 10 }] }), true);
+  assert.equal(validPixCheckoutPayment({ ...valid, items: [{ value: 29.9, quantity: 0 }] }), false);
   assert.equal(validPixCheckoutPayment({ ...valid, status: "ACTIVE" }), false);
 });
 
@@ -40,7 +40,7 @@ test("monthly billing period clamps month ends and preserves UTC time", () => {
 });
 
 test("reconciliation only treats completed refunds or chargebacks as reversals", () => {
-  assert.equal(paymentWasReversed({ status: "RECEIVED", refunds: [{ status: "PENDING", value: 59.9 }] }), false);
+  assert.equal(paymentWasReversed({ status: "RECEIVED", refunds: [{ status: "PENDING", value: 29.9 }] }), false);
   assert.equal(paymentWasReversed({ status: "RECEIVED", refunds: [{ status: "DONE", value: 10 }] }), true);
   assert.equal(paymentWasReversed({ status: "CHARGEBACK_REQUESTED" }), true);
 });

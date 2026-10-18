@@ -3,58 +3,148 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#070d20">
-    <meta name="description" content="Acesse seu espaço no Nivel Creator AI.">
-    <title>Entrar · Nivel Creator AI</title>
+    <meta name="theme-color" content="#101126">
+    <meta name="description" content="Um estúdio para testar ideias, criar conteúdo com direção e organizar sua vida de creator.">
+    <title>Nivel Creator AI · Ideias em movimento</title>
     <link rel="stylesheet" href="/auth.css">
     <script src="/auth.js" defer></script>
   </head>
   <body>
-    <main class="auth-shell">
-      <a class="auth-brand" href="/"><span class="brand-glyph">✦</span><span>nivel <b>Creator AI</b></span></a>
-      <section class="auth-card" aria-labelledby="auth-title">
-        <p class="eyebrow">SEU ESPAÇO DE CRIAÇÃO</p>
-        <h1 id="auth-title">Entre no seu ritmo.</h1>
-        <p class="auth-intro">Acesse suas ideias, roteiros e planejamento em um só lugar.</p>
-        <div class="auth-tabs" role="tablist" aria-label="Tipo de acesso">
-          <button class="auth-tab active" id="login-tab" type="button" role="tab" aria-selected="true">Entrar</button>
-          <button class="auth-tab" id="signup-tab" type="button" role="tab" aria-selected="false">Criar conta</button>
-        </div>
-        <form id="auth-form" novalidate>
-          <label for="email">E-mail</label>
-          <input id="email" name="email" type="email" autocomplete="email" maxlength="254" required placeholder="voce@email.com">
-          <label for="password">Senha</label>
-          <input id="password" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" required placeholder="Pelo menos 8 caracteres">
-          <div id="mfa-login-group" hidden>
-            <label for="mfa-factor">Autenticador</label>
-            <select id="mfa-factor"></select>
-            <label for="mfa-login-code">Código de verificação</label>
-            <input id="mfa-login-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,8}" maxlength="8" placeholder="Código do aplicativo autenticador">
-            <button class="forgot-password" id="mfa-cancel" type="button">Cancelar e sair</button>
-          </div>
-          <div id="mfa-enroll-group" hidden>
-            <p>Como administrador, você precisa ativar um autenticador para proteger sua conta e o workspace.</p>
-            <button class="forgot-password" id="mfa-enroll-start" type="button">Gerar QR code de configuração</button>
-            <div id="mfa-enroll-details" hidden>
-              <img id="mfa-enroll-qr" alt="QR code de configuração do autenticador">
-              <p>Chave manual: <code id="mfa-enroll-secret"></code></p>
+    <main class="auth-shell" id="top">
+      <div class="ambient ambient-one" aria-hidden="true"></div>
+      <div class="ambient ambient-two" aria-hidden="true"></div>
+      <div class="ambient ambient-three" aria-hidden="true"></div>
+
+      <section class="presentation" id="presentation">
+        <header class="site-header">
+          <a class="brand-lockup" href="/" aria-label="Nivel Creator AI, início">
+            <span class="brand-symbol" aria-hidden="true">
+              <svg viewBox="0 0 48 48" role="presentation"><path class="symbol-spark" d="M24 7.5c1.5 8.8 5.8 13.1 16.5 16.5C29.8 27.4 25.5 31.7 24 40.5 22.5 31.7 18.2 27.4 7.5 24 18.2 20.6 22.5 16.3 24 7.5Z"/><path class="symbol-cut" d="M24 15.5v17M15.5 24h17"/></svg>
+            </span>
+            <span class="brand-type"><strong>nivel</strong><span>Creator AI</span></span>
+          </a>
+          <nav class="header-actions" aria-label="Acesso">
+            <a class="login-link" id="header-login-link" href="#access-screen">Entrar</a>
+            <button class="header-cta" type="button" data-select-plan="trial">Começar grátis <span aria-hidden="true">↗</span></button>
+          </nav>
+        </header>
+
+        <section class="hero" aria-labelledby="hero-title">
+          <div class="hero-copy">
+            <p class="eyebrow"><span class="eyebrow-line"></span> IDEIAS, TESTES E CRIAÇÃO COM DIREÇÃO</p>
+            <h1 id="hero-title">Sua próxima ideia começa <em>aqui.</em></h1>
+            <p class="hero-lede">Um espaço para desenvolver ideias, criar conteúdo com intenção e entender o que faz sentido para a sua audiência.</p>
+            <div class="hero-actions">
+              <button class="primary-cta" type="button" data-select-plan="trial">Começar grátis <span aria-hidden="true">→</span></button>
+              <a class="secondary-cta" href="#como-funciona">Conhecer o estúdio <span aria-hidden="true">↓</span></a>
             </div>
-            <label for="mfa-enroll-code">Código do aplicativo autenticador</label>
-            <input id="mfa-enroll-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,8}" maxlength="8" placeholder="Código de 6 a 8 dígitos">
-            <button class="forgot-password" id="mfa-cancel-enrollment" type="button">Cancelar e sair</button>
+            <p class="hero-reassurance"><span aria-hidden="true">✦</span> 7 dias para explorar · sem cartão no cadastro</p>
           </div>
-          <button class="forgot-password" id="forgot-password" type="button">Esqueci minha senha</button>
-          <div id="confirm-password-group" hidden><label for="confirm-password">Confirme a nova senha</label><input id="confirm-password" type="password" autocomplete="new-password" minlength="8" maxlength="128"></div>
-          <p class="form-message" id="form-message" role="status" aria-live="polite"></p>
-          <button class="submit-button" id="submit-button" type="submit">Entrar <span>→</span></button>
-        </form>
-        <div class="setup-message" id="setup-message" hidden>
-          <b>O acesso está sendo preparado.</b>
-          <p>O produto ainda precisa conectar seu provedor de autenticação e o banco de dados antes de aceitar contas.</p>
-        </div>
-        <p class="privacy-note">Sua sessão é protegida e não fica exposta ao JavaScript da página.</p>
+
+          <div class="hero-art" aria-label="Prévia ilustrativa de uma ideia sendo desenvolvida no estúdio">
+            <div class="art-grid" aria-hidden="true"></div>
+            <div class="orbit orbit-a" aria-hidden="true"></div><div class="orbit orbit-b" aria-hidden="true"></div>
+            <article class="floating-idea">
+              <div class="idea-topline"><span class="idea-pulse"></span><span>IDEIA EM DESENVOLVIMENTO</span><b>•••</b></div>
+              <p class="idea-label">PONTO DE PARTIDA</p>
+              <h2>Quero falar sobre criar sem esperar pela ideia perfeita.</h2>
+              <div class="idea-tags"><span>criatividade</span><span>rotina real</span><span>Reels</span></div>
+              <div class="idea-divider"></div>
+              <div class="idea-result"><span class="result-icon">✦</span><div><small>UMA DIREÇÃO POSSÍVEL</small><b>Mostre o primeiro rascunho, não só o resultado.</b></div></div>
+              <div class="idea-meter"><span></span></div>
+              <div class="idea-meta"><span>Roteiro em construção</span><b>01 / 03</b></div>
+            </article>
+            <div class="float-chip chip-voice"><span class="chip-orb">◉</span><span><b>Sua voz</b><small>preservada no roteiro</small></span></div>
+            <div class="float-chip chip-hook"><span class="hook-star">✳</span><span><b>Gancho</b><small>“E se você começasse hoje?”</small></span></div>
+            <div class="float-sticker">TESTE <b>↗</b> APRENDA</div>
+            <span class="art-spark spark-a" aria-hidden="true">✳</span><span class="art-spark spark-b" aria-hidden="true">✦</span>
+          </div>
+          <div class="hero-caption"><span class="caption-rule"></span><span>Da ideia solta à criação com intenção.</span></div>
+        </section>
+
+        <section class="intro-section" id="sobre">
+          <div class="section-heading">
+            <p class="eyebrow">O SEU PROCESSO CRIATIVO, MAIS CLARO</p>
+            <h2>Um estúdio para experimentar.<br><em>Um espaço para crescer.</em></h2>
+          </div>
+          <p class="section-copy">O Nivel Creator AI reúne estratégia, criação e organização para você não precisar começar do zero a cada postagem. A IA ajuda no rascunho; as escolhas continuam sendo suas.</p>
+          <div class="feature-grid" id="como-funciona">
+            <article class="feature-card feature-violet"><span class="feature-number">01</span><span class="feature-icon">✳</span><h3>Desenvolva a ideia</h3><p>Parta de uma vontade, pergunta ou referência e encontre um ângulo para explorar.</p><span class="feature-tail">IDEIA → DIREÇÃO</span></article>
+            <article class="feature-card feature-peach"><span class="feature-number">02</span><span class="feature-icon">↗</span><h3>Crie no seu ritmo</h3><p>Monte roteiros e planos semanais para revisar, adaptar e levar à sua agenda.</p><span class="feature-tail">RASCUNHO → AÇÃO</span></article>
+            <article class="feature-card feature-lime"><span class="feature-number">03</span><span class="feature-icon">◇</span><h3>Acompanhe o caminho</h3><p>Organize parcerias e, quando conectar uma conta profissional, veja os dados disponíveis.</p><span class="feature-tail">ORGANIZAÇÃO → APRENDIZADO</span></article>
+          </div>
+        </section>
+
+        <section class="plans-section" id="planos" aria-labelledby="plans-title">
+          <div class="plans-heading">
+            <div><p class="eyebrow">UM COMEÇO QUE CABE NO SEU MOMENTO</p><h2 id="plans-title">Escolha como quer começar.</h2><p>Seu espaço, suas ideias, seu ritmo.</p></div>
+            <span class="plan-side-note"><b>✦</b> Sem cobrança automática<br>sem sua confirmação.</span>
+          </div>
+          <div class="plans-grid">
+            <article class="plan-card plan-free">
+              <div class="plan-card-top"><span class="plan-icon free-icon">✦</span><span class="plan-badge">PARA EXPERIMENTAR</span></div>
+              <h3>Trial grátis</h3><p class="plan-description">Conheça o estúdio e comece a colocar suas ideias em movimento.</p>
+              <p class="plan-price"><strong>R$ 0</strong><span>por 7 dias</span></p>
+              <ul><li>10 roteiros com IA</li><li>2 diagnósticos de perfil</li><li>1 plano editorial semanal</li><li>30 mensagens no agente pessoal</li><li>250 MB para sua biblioteca</li></ul>
+              <button class="plan-button free-button" type="button" data-select-plan="trial">Começar grátis <span aria-hidden="true">→</span></button>
+              <small class="plan-footnote">Cadastro sem cartão. Confirme seu e-mail para ativar o trial.</small>
+            </article>
+            <article class="plan-card plan-creator">
+              <div class="plan-card-top"><span class="plan-icon creator-icon">✦</span><span class="plan-badge creator-badge">PARA CONTINUAR CRESCENDO</span></div>
+              <h3>Pro</h3><p class="plan-description">Mais espaço para criar, planejar e acompanhar seus projetos.</p>
+              <p class="plan-price"><strong>R$ 29,90</strong><span>/ mês</span></p>
+              <ul><li>60 roteiros por ciclo</li><li>8 diagnósticos de perfil</li><li>4 planos editoriais por ciclo</li><li>200 mensagens no agente pessoal</li><li>2 GB para sua biblioteca</li></ul>
+              <button class="plan-button creator-button" type="button" data-select-plan="pro">Escolher Pro <span aria-hidden="true">→</span></button>
+              <small class="plan-footnote">Cartão recorrente ou Pix por um ciclo. Você confirma o pagamento depois do cadastro.</small>
+            </article>
+          </div>
+          <p class="plans-disclaimer">A escolha do plano não inicia uma cobrança. O acesso pago só começa após você revisar e confirmar o checkout.</p>
+        </section>
+
+        <footer class="site-footer"><a class="footer-brand" href="#top"><span class="footer-glyph">✦</span> nivel <b>Creator AI</b></a><span>Estratégia, experimentos e criação para creators.</span><a href="#planos">Escolher plano ↑</a></footer>
       </section>
-      <p class="auth-footer">Nivel Creator AI <span>·</span> Estratégia, criação e organização para creators.</p>
+
+      <section class="access-screen" id="access-screen" hidden aria-labelledby="auth-title">
+        <a class="brand-lockup access-brand" href="/" aria-label="Nivel Creator AI, início">
+          <span class="brand-symbol" aria-hidden="true"><svg viewBox="0 0 48 48" role="presentation"><path class="symbol-spark" d="M24 7.5c1.5 8.8 5.8 13.1 16.5 16.5C29.8 27.4 25.5 31.7 24 40.5 22.5 31.7 18.2 27.4 7.5 24 18.2 20.6 22.5 16.3 24 7.5Z"/><path class="symbol-cut" d="M24 15.5v17M15.5 24h17"/></svg></span>
+          <span class="brand-type"><strong>nivel</strong><span>Creator AI</span></span>
+        </a>
+        <button class="back-link" id="back-to-presentation" type="button"><span aria-hidden="true">←</span> Voltar à apresentação</button>
+        <section class="auth-card" aria-labelledby="auth-title">
+          <div class="auth-card-heading"><span class="card-mark" aria-hidden="true">✦</span><p class="eyebrow">SEU ESPAÇO DE CRIAÇÃO</p></div>
+          <h1 id="auth-title">Seu próximo passo começa aqui.</h1>
+          <p class="auth-intro" id="auth-intro">Crie seu acesso para começar o trial gratuito de 7 dias.</p>
+          <div class="selected-plan-note" id="selected-plan-note" aria-live="polite"><span>PLANO SELECIONADO</span><b id="selected-plan-name">Trial grátis · R$ 0 por 7 dias</b></div>
+          <div class="auth-tabs" role="tablist" aria-label="Tipo de acesso">
+            <button class="auth-tab active" id="login-tab" type="button" role="tab" aria-selected="true">Entrar</button>
+            <button class="auth-tab" id="signup-tab" type="button" role="tab" aria-selected="false">Criar conta</button>
+          </div>
+          <form id="auth-form" novalidate>
+            <label for="email">E-mail</label>
+            <input id="email" name="email" type="email" autocomplete="email" maxlength="254" required placeholder="voce@email.com">
+            <label for="password">Senha</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" required placeholder="Pelo menos 8 caracteres">
+            <div id="mfa-login-group" hidden>
+              <label for="mfa-factor">Autenticador</label><select id="mfa-factor"></select>
+              <label for="mfa-login-code">Código de verificação</label><input id="mfa-login-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,8}" maxlength="8" placeholder="Código do aplicativo autenticador">
+              <button class="forgot-password" id="mfa-cancel" type="button">Cancelar e sair</button>
+            </div>
+            <div id="mfa-enroll-group" hidden>
+              <p>Como administrador, você precisa ativar um autenticador para proteger sua conta e o workspace.</p>
+              <button class="forgot-password" id="mfa-enroll-start" type="button">Gerar QR code de configuração</button>
+              <div id="mfa-enroll-details" hidden><img id="mfa-enroll-qr" alt="QR code de configuração do autenticador"><p>Chave manual: <code id="mfa-enroll-secret"></code></p></div>
+              <label for="mfa-enroll-code">Código do aplicativo autenticador</label><input id="mfa-enroll-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,8}" maxlength="8" placeholder="Código de 6 a 8 dígitos">
+              <button class="forgot-password" id="mfa-cancel-enrollment" type="button">Cancelar e sair</button>
+            </div>
+            <button class="forgot-password" id="forgot-password" type="button">Esqueci minha senha</button>
+            <div id="confirm-password-group" hidden><label for="confirm-password">Confirme a nova senha</label><input id="confirm-password" type="password" autocomplete="new-password" minlength="8" maxlength="128"></div>
+            <p class="form-message" id="form-message" role="status" aria-live="polite"></p>
+            <button class="submit-button" id="submit-button" type="submit">Entrar <span>→</span></button>
+          </form>
+          <div class="setup-message" id="setup-message" hidden><b>O acesso está sendo preparado.</b><p>O produto ainda precisa conectar seu provedor de autenticação e o banco de dados antes de aceitar contas.</p></div>
+          <p class="privacy-note">Sua sessão é protegida e não fica exposta ao JavaScript da página.</p>
+        </section>
+      </section>
     </main>
   </body>
 </html>

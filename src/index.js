@@ -245,7 +245,7 @@ async function accountHandler(request, env, path) {
   if (!isProviderConfigured(env)) throw new AuthError(503, "Configure Supabase Auth e D1 para usar sua conta.");
 
   const { user, cookies } = await requireUser(request, env);
-  const account = await getWorkspace(env, user.id);
+  const account = await getWorkspace(env, user.id) || await ensureWorkspace(env, user);
   if (!account) throw new AuthError(404, "Seu espaço ainda não foi preparado. Confirme o e-mail novamente ou entre em contato com o suporte.");
   if (path === "/api/me" && request.method === "GET") {
     return response({

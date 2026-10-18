@@ -2,7 +2,7 @@ import { AuthError, assertSameOrigin, readJson } from "./auth.js";
 
 const ASAAS_API = "https://api-sandbox.asaas.com/v3";
 const CHECKOUT_LINK = "https://asaas.com/checkoutSession/show?id=";
-const PRICE = 59.9;
+const PRICE = 29.9;
 const PRODUCT_REFERENCE = "nivel-creator-checkout:";
 
 async function asaasRequest(env, path, options = {}) {
@@ -297,7 +297,7 @@ async function processWebhookEvent(env, event) {
     if (!intent && subscription.customer) intent = await db.prepare(`SELECT * FROM billing_checkout_intents
       WHERE provider_customer_id=?1 ORDER BY created_at DESC LIMIT 1`).bind(subscription.customer).first();
     if (!intent) return subscription.externalReference?.startsWith(PRODUCT_REFERENCE) ? "retry" : "ignored";
-    if ((subscription.value !== undefined && Math.round(Number(subscription.value) * 100) !== 5990) ||
+    if ((subscription.value !== undefined && Math.round(Number(subscription.value) * 100) !== Math.round(PRICE * 100)) ||
         (subscription.cycle && subscription.cycle !== "MONTHLY")) return "ignored";
     const isDeleted = event.event === "SUBSCRIPTION_DELETED" || subscription.deleted === true;
     const providerActive = subscription.status === "ACTIVE";

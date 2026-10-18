@@ -7,7 +7,7 @@ Este procedimento cobre os dados do `nivel-creator-ai`: D1 (`nivel-creator`) e o
 - D1 Time Travel é automático. O período de recuperação é de até 7 dias no Workers Free ou 30 dias no Workers Paid. Confirme o plano e o tipo de armazenamento da base antes de contar com esse recurso.
 - R2 não é recuperado por uma restauração de D1. Faça cópia independente dos objetos e mantenha a chave original, `workspace_id`, tamanho e SHA-256 para verificar integridade.
 - A aplicação grava `sha256` na linha de `files` e nos metadados R2. Use esse valor para validar os objetos recuperados.
-- O identificador de D1 em `wrangler.jsonc` ainda é um placeholder neste repositório. Os comandos remotos só podem ser executados depois de configurar e confirmar o banco correto.
+- O `wrangler.jsonc` contém um identificador de D1 configurado para `nivel-creator`. Antes de qualquer comando remoto, confirme no painel Cloudflare que a conta, o nome e o ID correspondem ao ambiente pretendido; não presuma que o arquivo sozinho comprova o estado remoto.
 
 ## Preparação operacional
 
