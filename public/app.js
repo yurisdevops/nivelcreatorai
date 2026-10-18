@@ -1971,6 +1971,7 @@ async function loadSettings() {
     document.querySelector('#settings-goal').value = data.profile.goals[0] || '';
     document.querySelector('#settings-voice').value = data.profile.voice || '';
     document.querySelector('#settings-ai-consent').checked = data.profile.ai_consent;
+    setProfileLocked(Boolean(data.profile.completed));
     let retentionNote = document.querySelector('#settings-retention');
     if (!retentionNote) {
       retentionNote = document.createElement('p');
@@ -2233,7 +2234,8 @@ document.querySelector('#settings-profile-form').addEventListener('submit', asyn
       headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
     const data = await result.json();
     if (!result.ok) throw new Error(data.error || 'Não foi possível salvar seu perfil.');
-    announce('Perfil e consentimento atualizados.');
+    announce('Perfil salvo.');
+    setProfileLocked(true);
     await loadAccount();
   } catch (error) { announce(error.message || 'Não foi possível salvar seu perfil.'); }
 });
@@ -2395,3 +2397,31 @@ function showSettingsTab(key) {
 }
 document.querySelectorAll('.settings-tab').forEach((tab) => tab.addEventListener('click', () => showSettingsTab(tab.dataset.settingsTab)));
 showSettingsTab('settings-profile-form');
+
+// Saved profile fields stay read-only until the creator chooses to edit them.
+function setProfileLocked(locked) {
+  const form = document.querySelector('#settings-profile-form');
+  form.classList.toggle('is-locked', locked);
+  form.querySelectorAll('input, textarea, .example-pill').forEach((field) => { field.disabled = locked; });
+  document.querySelector('#settings-profile-save').hidden = locked;
+  document.querySelector('#settings-profile-edit').hidden = !locked;
+}
+document.querySelector('#settings-profile-edit').addEventListener('click', () => {
+  setProfileLocked(false);
+  document.querySelector('#settings-niche').focus();
+});
+
+document.addEventListener('click', (event) => {
+  const pill = event.target.closest('.example-pill[data-target]');
+  if (!pill || pill.disabled) return;
+  const field = document.getElementById(pill.dataset.target);
+  if (!field) return;
+  const text = pill.textContent.trim();
+  if (pill.dataset.mode === 'append' && field.value.trim() && !field.value.includes(text)) {
+    field.value = `${field.value.trim()} ${text}`.slice(0, Number(field.maxLength) > 0 ? field.maxLength : 500);
+  } else {
+    field.value = text;
+  }
+  field.dispatchEvent(new Event('input', { bubbles: true }));
+  field.focus();
+});
