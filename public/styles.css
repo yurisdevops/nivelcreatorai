@@ -187,3 +187,4 @@ body{background:radial-gradient(ellipse at 64% 0,#11163a 0,#070d20 43%,#060a17 1
 .topbar .global-search{order:2;margin-right:auto}.topbar .notification-toggle{order:3;margin-left:0}.topbar .top-actions{order:4}.topbar .crumb{order:1}
 .topbar .crumb{white-space:nowrap;flex:none}.topbar .global-search{margin-left:12px}
 .notification-star{width:20px;height:20px;fill:#d3a8ff}.notification-toggle:hover .notification-star{fill:#fff}.topbar .notification-toggle{margin-right:10px}
+.ai-inline-button{width:100%;margin-top:12px}.campaign-detail .ai-inline-button{margin:12px 0 2px}

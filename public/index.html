@@ -164,15 +164,15 @@
           <section class="studio-view" id="view-campanhas" hidden>
             <div class="studio-heading"><div><p class="eyebrow">CAMPANHAS UGC</p><h1>Campanhas UGC</h1><p class="intro">Gerencie suas parcerias com marcas, acompanhe prazos e entregue seu melhor conteúdo.</p></div><button class="button button-primary" id="campaign-new" type="button">＋ Nova campanha</button></div>
             <div class="campaign-stats">
-              <article class="campaign-stat"><span class="stat-icon green">◇</span><div><small>Campanhas ativas</small><b id="campaign-stat-active">0</b><em id="campaign-stat-prospecting">0 em prospecção</em></div></article>
+              <article class="campaign-stat"><span class="stat-icon green">◇</span><div><small>Campanhas ativas</small><b id="campaign-stat-active">0</b><em id="campaign-stat-prospecting">0 em prospecção · 0 entregues</em></div></article>
               <article class="campaign-stat"><span class="stat-icon violet">▶</span><div><small>Entregáveis pendentes</small><b id="campaign-stat-pending">0</b><em id="campaign-stat-done">0 concluídos</em></div></article>
               <article class="campaign-stat"><span class="stat-icon blue">▦</span><div><small>Prazo mais próximo</small><b id="campaign-stat-due">—</b><em id="campaign-stat-due-date">Sem prazos</em></div></article>
             </div>
             <div class="campaign-layout">
-              <section class="panel campaign-column"><div class="panel-title"><h2>Minhas campanhas</h2><select id="campaign-filter" aria-label="Filtrar campanhas"><option value="active">Ativas</option><option value="prospecting">Mirando</option><option value="done">Entregues</option><option value="all">Todas</option></select></div><div id="campaign-list" class="campaign-list"></div></section>
+              <section class="panel campaign-column"><div class="panel-title"><h2>Minhas campanhas</h2><select id="campaign-filter" aria-label="Filtrar campanhas"><option value="all">Todas</option><option value="active">Em andamento</option><option value="prospecting">Mirando</option><option value="done">Entregues</option></select></div><div id="campaign-list" class="campaign-list"></div></section>
               <section class="panel campaign-detail" id="campaign-detail"><div class="script-empty"><span>◇</span><b>Escolha ou crie uma campanha.</b><p>O briefing, os entregáveis e o contato da marca aparecem aqui.</p></div></section>
               <div class="campaign-side">
-                <section class="panel"><div class="panel-title"><h2>Checklist de gravação</h2><span class="checklist-count" id="campaign-checklist-count"></span></div><div id="campaign-checklist" class="check-list"><p class="privacy-note">Selecione uma campanha.</p></div></section>
+                <section class="panel"><div class="panel-title"><h2>Checklist de gravação</h2><span class="checklist-count" id="campaign-checklist-count"></span></div><button class="button button-outline ai-inline-button" id="campaign-checklist-ai" type="button" hidden>✦ Gerar checklist com IA a partir do briefing</button><div id="campaign-checklist" class="check-list"><p class="privacy-note">Selecione uma campanha.</p></div></section>
                 <section class="panel"><div class="panel-title"><h2>Contatos de marcas</h2></div><div id="campaign-contacts" class="contact-list"><p class="privacy-note">Os contatos que você salvar nas campanhas aparecem aqui.</p></div></section>
               </div>
             </div>

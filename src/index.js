@@ -394,7 +394,7 @@ export default {
         const { user, cookies } = await requireUser(request, env);
         const workspace = await getWorkspace(env, user.id);
         if (!workspace) throw new AuthError(404, "Seu espaço ainda não foi preparado.");
-        if (request.method === "POST" && rateLimitedAiPaths.has(url.pathname)) {
+        if (request.method === "POST" && (rateLimitedAiPaths.has(url.pathname) || /^\/api\/campaigns\/[^/]+\/checklist$/.test(url.pathname))) {
           await enforceRateLimit(env.AI_RATE_LIMITER, `${workspace.workspace_id}:${url.pathname}`, "geração de IA neste espaço");
         }
         let result = await creativeHandler(request, env, url.pathname, workspace);

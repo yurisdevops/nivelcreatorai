@@ -79,3 +79,13 @@ test("deleting calendar items and plans is scoped to the workspace", async () =>
     (error) => error instanceof AuthError && error.status === 404);
   assert.ok(calls.every((call) => call.sql.includes("workspace_id=?2") && call.params[1] === account.workspace_id));
 });
+
+test("the AI checklist needs consent and stays inside the workspace", async () => {
+  const id = "11111111-1111-4111-8111-111111111111";
+  const row = { id, brand_name: "Natura", status: "in_progress", due_at: null, created_at: "", brief_json: JSON.stringify({ title: "Sérum", notes: "Vídeo de 60s", deliverables: ["1 Reels"] }) };
+  const db = { prepare: (sql) => ({ bind: (...params) => ({ first: async () => sql.includes("FROM campaigns") ? (params[1] === account.workspace_id ? row : null) : { ai_data_consent_at: null } }) }) };
+  await assert.rejects(campaignsHandler(request(`/api/campaigns/${id}/checklist`, "POST", {}), { DB: db, GEMINI_API_KEY: "k" }, `/api/campaigns/${id}/checklist`, account),
+    (error) => error instanceof AuthError && error.status === 403);
+  await assert.rejects(campaignsHandler(request(`/api/campaigns/${id}/checklist`, "POST", {}), { DB: db }, `/api/campaigns/${id}/checklist`, { workspace_id: "other" }),
+    (error) => error instanceof AuthError && error.status === 404);
+});

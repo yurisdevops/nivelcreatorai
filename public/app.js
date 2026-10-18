@@ -1430,7 +1430,8 @@ function renderCampaignStats() {
   const prospecting = campaignCache.filter((item) => item.status === 'prospecting').length;
   const deliverables = active.flatMap((item) => item.deliverables);
   document.querySelector('#campaign-stat-active').textContent = String(active.length);
-  document.querySelector('#campaign-stat-prospecting').textContent = `${prospecting} em prospecção`;
+  const delivered = campaignCache.filter((item) => campaignGroups.done.includes(item.status)).length;
+  document.querySelector('#campaign-stat-prospecting').textContent = `${prospecting} em prospecção · ${delivered} ${delivered === 1 ? 'entregue' : 'entregues'}`;
   document.querySelector('#campaign-stat-pending').textContent = String(deliverables.filter((item) => !item.done).length);
   document.querySelector('#campaign-stat-done').textContent = `${deliverables.filter((item) => item.done).length} concluídos`;
   const next = active.filter((item) => item.due_at && daysUntil(item.due_at) >= 0).sort((a, b) => a.due_at.localeCompare(b.due_at))[0];
@@ -1493,6 +1494,7 @@ function renderCampaignDetail() {
   checklistBox.replaceChildren();
   checklistCount.textContent = '';
   if (!campaign) {
+    document.querySelector('#campaign-checklist-ai').hidden = true;
     const empty = el('div', 'script-empty');
     empty.append(el('span', '', '◇'), el('b', '', 'Escolha ou crie uma campanha.'), el('p', '', 'O briefing, os entregáveis e o contato da marca aparecem aqui.'));
     detail.append(empty);
@@ -1515,6 +1517,12 @@ function renderCampaignDetail() {
     .then(() => announce('Etapa da campanha atualizada.')).catch(fail));
   head.append(el('span', 'brand-initial large', campaign.brand_name.trim().charAt(0).toUpperCase()), names, status);
   detail.append(head);
+  if (!campaignGroups.done.includes(campaign.status) && campaign.status !== 'archived') {
+    const scriptButton = el('button', 'button button-primary ai-inline-button', '✦ Gerar roteiro com IA');
+    scriptButton.type = 'button';
+    scriptButton.addEventListener('click', () => openCampaignInStudio(campaign.id));
+    detail.append(scriptButton);
+  }
 
   const block = (icon, title) => {
     const section = el('section', 'detail-block');
@@ -1547,7 +1555,44 @@ function renderCampaignDetail() {
   for (const value of contactLines) contactBlock.append(el('p', '', value));
 
   checklistCount.textContent = `${campaign.checklist.filter((item) => item.done).length}/${campaign.checklist.length}`;
+  const aiChecklist = document.querySelector('#campaign-checklist-ai');
+  aiChecklist.hidden = false;
+  aiChecklist.onclick = () => generateCampaignChecklist(campaign, aiChecklist);
   checkItems(checklistBox, campaign.checklist, (checklist) => saveCampaign(campaign.id, { checklist }).catch(fail));
+}
+
+async function generateCampaignChecklist(campaign, button) {
+  if (campaign.checklist.some((item) => item.done) && !confirm('Substituir o checklist atual por um novo, gerado a partir do briefing?')) return;
+  const label = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Lendo o briefing…';
+  try {
+    const result = await fetch(`/api/campaigns/${campaign.id}/checklist`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: '{}' });
+    const data = await result.json().catch(() => ({}));
+    if (result.status === 401) { location.href = '/entrar.html?redirect=%2F'; return; }
+    if (result.status === 403 && /Autorize/.test(data.error || '')) { openOnboarding(); throw new Error('Para usar a IA, complete seu perfil e marque a autorização de uso da IA.'); }
+    if (!result.ok) throw new Error(data.error || 'Não foi possível gerar o checklist.');
+    campaign.checklist = data.checklist;
+    renderCampaignDetail();
+    announce('Checklist criado a partir do briefing.');
+  } catch (error) { announce(error.message || 'Não foi possível gerar o checklist.'); }
+  finally { button.disabled = false; button.textContent = label; }
+}
+
+function openCampaignInStudio(campaignId) {
+  document.querySelector('.nav-link[data-view="roteiros"]').click();
+  const pick = () => {
+    const select = document.querySelector('#script-campaign');
+    if ([...select.options].some((option) => option.value === campaignId)) {
+      select.value = campaignId;
+      document.querySelector('#campaign-script-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      document.querySelector('#opinion-liked').focus({ preventScroll: true });
+      return true;
+    }
+    return false;
+  };
+  if (pick()) return;
+  loadScriptCampaigns().then(pick);
 }
 
 function renderCampaignContacts() {
