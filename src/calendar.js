@@ -47,6 +47,13 @@ export async function calendarHandler(request, env, path, account) {
     return { saved: true, id };
   }
   const match = path.match(/^\/api\/calendar\/events\/([0-9a-f-]{36})$/i);
+  if (match && request.method === "DELETE") {
+    assertSameOrigin(request);
+    const result = await db.prepare("DELETE FROM calendar_events WHERE id=?1 AND workspace_id=?2")
+      .bind(match[1], account.workspace_id).run();
+    if (!result.meta?.changes) throw new AuthError(404, "Este conteúdo não foi encontrado no seu espaço.");
+    return { deleted: true };
+  }
   if (match && request.method === "PUT") {
     assertSameOrigin(request);
     const changes = cleanEvent(await readJson(request), true);

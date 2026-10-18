@@ -836,7 +836,15 @@ function renderPlans(plans) {
     addToCalendar.type = 'button';
     addToCalendar.textContent = 'Adicionar semana ao calendário →';
     addToCalendar.addEventListener('click', () => addPlanToCalendar(plan.id, addToCalendar));
-    card.append(heading, objective, items, addToCalendar);
+    const removePlan = document.createElement('button');
+    removePlan.className = 'text-button danger-link';
+    removePlan.type = 'button';
+    removePlan.textContent = 'Excluir plano';
+    removePlan.addEventListener('click', async () => {
+      if (!confirm('Excluir este plano? Os conteúdos que você já mandou para o calendário continuam lá.')) return;
+      if (await deleteResource(`/api/plans/${plan.id}`)) { announce('Plano excluído.'); await loadPlans(); }
+    });
+    card.append(heading, objective, items, addToCalendar, removePlan);
     list.append(card);
   }
 }
@@ -1115,6 +1123,59 @@ async function loadWeek() {
   } catch (error) { announce(error.message || 'Não foi possível carregar a semana.'); }
 }
 
+async function deleteResource(path) {
+  try {
+    const result = await fetch(path, { method: 'DELETE', credentials: 'same-origin', headers: { 'content-type': 'application/json' } });
+    const data = await result.json().catch(() => ({}));
+    if (result.status === 401) { location.href = '/entrar.html?redirect=%2F'; return false; }
+    if (!result.ok) throw new Error(data.error || 'Não foi possível excluir.');
+    return true;
+  } catch (error) { announce(error.message || 'Não foi possível excluir.'); return false; }
+}
+
+async function deleteEvent(item) {
+  if (!confirm(`Excluir "${item.title}" do planejamento?`)) return;
+  if (await deleteResource(`/api/calendar/events/${item.id}`)) {
+    moduleLoaded.calendario = false;
+    announce('Conteúdo excluído.');
+    await loadWeek();
+  }
+}
+
+async function moveEvent(id, changes) {
+  const item = weekEvents.find((entry) => entry.id === id);
+  if (!item) return;
+  Object.assign(item, changes);
+  renderWeek();
+  try {
+    const result = await fetch(`/api/calendar/events/${id}`, { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(changes) });
+    const data = await result.json().catch(() => ({}));
+    if (!result.ok) throw new Error(data.error || 'Não foi possível mover o conteúdo.');
+    moduleLoaded.calendario = false;
+  } catch (error) { announce(error.message); await loadWeek(); }
+}
+
+function makeDraggable(element, id) {
+  element.draggable = true;
+  element.addEventListener('dragstart', (event) => {
+    event.dataTransfer.setData('text/plain', id);
+    event.dataTransfer.effectAllowed = 'move';
+    element.classList.add('dragging');
+  });
+  element.addEventListener('dragend', () => element.classList.remove('dragging'));
+}
+
+function makeDropZone(element, onDrop) {
+  element.addEventListener('dragover', (event) => { event.preventDefault(); element.classList.add('drop-target'); });
+  element.addEventListener('dragleave', (event) => { if (!element.contains(event.relatedTarget)) element.classList.remove('drop-target'); });
+  element.addEventListener('drop', (event) => {
+    event.preventDefault();
+    element.classList.remove('drop-target');
+    const id = event.dataTransfer.getData('text/plain');
+    if (id) onDrop(id);
+  });
+}
+
 function renderWeek() {
   const end = new Date(weekStart);
   end.setDate(end.getDate() + 6);
@@ -1155,9 +1216,25 @@ function renderWeek() {
       title.textContent = item.title;
       const time = document.createElement('small');
       time.textContent = `◷ ${new Intl.DateTimeFormat('pt-BR', { timeStyle: 'short' }).format(new Date(item.scheduled_at))}`;
-      card.append(chip, title, time);
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'item-delete';
+      remove.setAttribute('aria-label', `Excluir ${item.title}`);
+      remove.textContent = '×';
+      remove.addEventListener('click', () => deleteEvent(item));
+      card.append(chip, remove, title, time);
+      makeDraggable(card, item.id);
       column.append(card);
     }
+    makeDropZone(column, (id) => {
+      const moving = weekEvents.find((entry) => entry.id === id);
+      if (!moving) return;
+      const when = moving.scheduled_at ? new Date(moving.scheduled_at) : new Date(day);
+      if (!moving.scheduled_at) when.setHours(10, 0, 0, 0);
+      when.setFullYear(day.getFullYear(), day.getMonth(), day.getDate());
+      if (moving.scheduled_at && sameDay(new Date(moving.scheduled_at), day)) return;
+      moveEvent(id, { scheduled_at: when.toISOString() });
+    });
     const add = document.createElement('button');
     add.type = 'button';
     add.className = 'week-add';
@@ -1188,45 +1265,67 @@ function renderWeek() {
   renderQueue();
 }
 
+const queueColumns = [['idea', 'Ideia', ['idea']], ['draft', 'Em roteiro', ['draft', 'ready_to_record']],
+  ['recorded', 'Gravado', ['recorded', 'approved']], ['published', 'Publicado', ['published']]];
+
 function renderQueue() {
   const box = document.querySelector('#content-queue');
   box.replaceChildren();
-  const group = queueGroups[queueFilter];
-  const items = weekEvents.filter((item) => item.status !== 'published' || queueFilter === 'published')
-    .filter((item) => !group || group.includes(item.status)).slice(0, 12);
-  if (!items.length) {
-    const empty = document.createElement('p');
-    empty.className = 'privacy-note';
-    empty.textContent = 'Nada nesta etapa. Adicione ideias na semana ou gere um plano com a IA.';
-    box.append(empty);
-    return;
-  }
-  for (const item of items) {
-    const card = document.createElement('article');
-    card.className = 'queue-item';
-    const chip = document.createElement('span');
-    chip.className = `queue-status status-${item.status}`;
-    chip.textContent = workflowLabels[item.status] || item.status;
+  for (const [status, label, statuses] of queueColumns) {
+    if (queueFilter !== 'all' && queueFilter !== status) continue;
+    const column = document.createElement('div');
+    column.className = 'queue-column';
+    const items = weekEvents.filter((item) => statuses.includes(item.status)).slice(0, 20);
+    const head = document.createElement('div');
+    head.className = 'queue-column-head';
     const title = document.createElement('b');
-    title.textContent = item.title;
-    const meta = document.createElement('small');
-    meta.textContent = item.scheduled_at
-      ? `${formatChips[item.format] || item.format} · ${new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'short' }).format(new Date(item.scheduled_at))}`
-      : `${formatChips[item.format] || item.format} · sem data`;
-    const next = workflow[Math.min(workflow.length - 1, workflow.indexOf(item.status) + 1)];
-    card.append(chip, title, meta);
-    if (next !== item.status) {
-      const advance = document.createElement('button');
-      advance.type = 'button';
-      advance.className = 'text-button';
-      advance.textContent = `Mover para ${workflowLabels[next]} →`;
-      advance.addEventListener('click', async () => {
-        await updateEvent(item.id, { status: next });
-        await loadWeek();
-      });
-      card.append(advance);
+    title.textContent = label;
+    const count = document.createElement('small');
+    count.textContent = String(items.length);
+    head.append(title, count);
+    column.append(head);
+    for (const item of items) {
+      const card = document.createElement('article');
+      card.className = 'queue-item';
+      const name = document.createElement('b');
+      name.textContent = item.title;
+      const meta = document.createElement('small');
+      meta.textContent = item.scheduled_at
+        ? `${formatChips[item.format] || item.format} · ${new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'short' }).format(new Date(item.scheduled_at))}`
+        : `${formatChips[item.format] || item.format} · sem data`;
+      const actions = document.createElement('div');
+      actions.className = 'queue-item-actions';
+      const position = queueColumns.findIndex(([key]) => key === status);
+      const next = queueColumns[position + 1];
+      if (next) {
+        const advance = document.createElement('button');
+        advance.type = 'button';
+        advance.className = 'text-button';
+        advance.textContent = `${next[1]} →`;
+        advance.addEventListener('click', () => moveEvent(item.id, { status: next[0] }));
+        actions.append(advance);
+      }
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'text-button danger-link';
+      remove.textContent = 'Excluir';
+      remove.addEventListener('click', () => deleteEvent(item));
+      actions.append(remove);
+      card.append(name, meta, actions);
+      makeDraggable(card, item.id);
+      column.append(card);
     }
-    box.append(card);
+    if (!items.length) {
+      const empty = document.createElement('p');
+      empty.className = 'queue-empty';
+      empty.textContent = 'Arraste um conteúdo para cá';
+      column.append(empty);
+    }
+    makeDropZone(column, (id) => {
+      const moving = weekEvents.find((entry) => entry.id === id);
+      if (moving && !statuses.includes(moving.status)) moveEvent(id, { status });
+    });
+    box.append(column);
   }
 }
 

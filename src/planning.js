@@ -93,9 +93,19 @@ async function savePlan(env, workspaceId, reservationId, access, plan, startDate
 
 export async function planningHandler(request, env, path, account) {
   const calendarMatch = path.match(/^\/api\/plans\/([0-9a-f-]{36})\/calendar$/i);
-  if (path !== "/api/plans" && path !== "/api/plans/generate" && !calendarMatch) return null;
+  const planMatch = path.match(/^\/api\/plans\/([0-9a-f-]{36})$/i);
+  if (path !== "/api/plans" && path !== "/api/plans/generate" && !calendarMatch && !planMatch) return null;
   if (!env.DB) throw new AuthError(503, "O banco de dados ainda não foi configurado.");
   const db = env.DB;
+  if (planMatch) {
+    if (request.method !== "DELETE") throw new AuthError(405, "Método não permitido.");
+    assertSameOrigin(request);
+    // Contents already sent to the calendar stay there; the usage record keeps the quota honest.
+    const result = await db.prepare("DELETE FROM editorial_plans WHERE id=?1 AND workspace_id=?2")
+      .bind(planMatch[1], account.workspace_id).run();
+    if (!result.meta?.changes) throw new AuthError(404, "Este plano não foi encontrado no seu espaço.");
+    return { deleted: true };
+  }
   if (calendarMatch) {
     if (request.method !== "POST") throw new AuthError(405, "Método não permitido.");
     assertSameOrigin(request);

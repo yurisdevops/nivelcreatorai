@@ -66,3 +66,16 @@ test("campaign routes are not swallowed by the calendar handler", async () => {
   const { calendarHandler } = await import("../src/calendar.js");
   assert.equal(await calendarHandler(request("/api/campaigns", "GET"), { DB: {} }, "/api/campaigns", account), null);
 });
+
+test("deleting calendar items and plans is scoped to the workspace", async () => {
+  const { calendarHandler } = await import("../src/calendar.js");
+  const { planningHandler } = await import("../src/planning.js");
+  const id = "11111111-1111-4111-8111-111111111111";
+  const calls = [];
+  const db = { prepare: (sql) => ({ bind: (...params) => { calls.push({ sql, params }); return { run: async () => ({ meta: { changes: 0 } }) }; } }) };
+  await assert.rejects(calendarHandler(request(`/api/calendar/events/${id}`, "DELETE"), { DB: db }, `/api/calendar/events/${id}`, account),
+    (error) => error instanceof AuthError && error.status === 404);
+  await assert.rejects(planningHandler(request(`/api/plans/${id}`, "DELETE"), { DB: db }, `/api/plans/${id}`, account),
+    (error) => error instanceof AuthError && error.status === 404);
+  assert.ok(calls.every((call) => call.sql.includes("workspace_id=?2") && call.params[1] === account.workspace_id));
+});
