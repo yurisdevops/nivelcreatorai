@@ -287,7 +287,7 @@ function showModule(name) {
   if (moduleLoaded[name]) return;
   if (name === 'roteiros') { loadScripts(); loadScriptCampaigns(); }
   if (name === 'diagnostico') loadDiagnostics();
-  if (name === 'planejamento') loadPlans();
+  if (name === 'planejamento') { loadPlans(); loadWeek(); }
   if (name === 'calendario') loadCalendar();
   if (name === 'biblioteca') loadLibrary();
   if (name === 'resultados') loadResults();
@@ -1075,6 +1075,191 @@ document.querySelector('#calendar-form').addEventListener('submit', async (event
     announce('Conteúdo adicionado à agenda.');
   } catch (error) { announce(error.message || 'Não foi possível adicionar à agenda.'); }
 });
+
+const queueGroups = { all: null, idea: ['idea'], draft: ['draft', 'ready_to_record'], recorded: ['recorded', 'approved'], published: ['published'] };
+const formatChips = { 'Reels (vídeo curto)': 'Reel', Stories: 'Story', Carrossel: 'Carrossel', UGC: 'UGC', TikTok: 'TikTok', Shorts: 'Shorts', Live: 'Live', Outro: 'Outro' };
+let weekEvents = [];
+let weekStart = startOfWeek(new Date());
+let queueFilter = 'all';
+let weekAddDate = null;
+
+function startOfWeek(date) {
+  const day = new Date(date);
+  day.setHours(0, 0, 0, 0);
+  day.setDate(day.getDate() - ((day.getDay() + 6) % 7));
+  return day;
+}
+
+function sameDay(a, b) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+async function loadWeek() {
+  try {
+    const [eventsResult, plansResult] = await Promise.all([
+      fetch('/api/calendar/events', { credentials: 'same-origin' }),
+      fetch('/api/plans', { credentials: 'same-origin' })
+    ]);
+    if (eventsResult.status === 401) { location.href = '/entrar.html?redirect=%2F'; return; }
+    const data = await eventsResult.json();
+    if (!eventsResult.ok) throw new Error(data.error || 'Não foi possível carregar a semana.');
+    weekEvents = data.events;
+    const plans = plansResult.ok ? await plansResult.json() : { plans: [] };
+    const latest = (plans.plans || [])[0];
+    document.querySelector('#week-objective').textContent = latest?.objective || latest?.plan?.focus || 'Defina no plano semanal abaixo';
+    renderWeek();
+  } catch (error) { announce(error.message || 'Não foi possível carregar a semana.'); }
+}
+
+function renderWeek() {
+  const end = new Date(weekStart);
+  end.setDate(end.getDate() + 6);
+  const dateFormat = new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'short' });
+  document.querySelector('#week-label').textContent = `${dateFormat.format(weekStart)} – ${dateFormat.format(end)}`;
+  const inWeek = weekEvents.filter((item) => item.scheduled_at && startOfWeek(new Date(item.scheduled_at)).getTime() === weekStart.getTime());
+  const posted = inWeek.filter((item) => item.status === 'published').length;
+  document.querySelector('#week-frequency').textContent = `${inWeek.length} ${inWeek.length === 1 ? 'conteúdo' : 'conteúdos'} na semana`;
+  document.querySelector('#week-average').textContent = inWeek.length ? `${(inWeek.length / 7).toFixed(1).replace('.', ',')} por dia em média` : 'Adicione conteúdos nos dias abaixo';
+  document.querySelector('#week-progress-label').textContent = `${posted} de ${inWeek.length} postados`;
+  document.querySelector('#week-progress-bar').style.width = `${inWeek.length ? Math.round((posted / inWeek.length) * 100) : 0}%`;
+
+  const grid = document.querySelector('#week-grid');
+  grid.replaceChildren();
+  const today = new Date();
+  for (let offset = 0; offset < 7; offset += 1) {
+    const day = new Date(weekStart);
+    day.setDate(day.getDate() + offset);
+    const column = document.createElement('div');
+    column.className = `week-day${sameDay(day, today) ? ' today' : ''}`;
+    const head = document.createElement('div');
+    head.className = 'week-day-head';
+    const name = document.createElement('b');
+    name.textContent = new Intl.DateTimeFormat('pt-BR', { weekday: 'short' }).format(day).replace('.', '');
+    const date = document.createElement('small');
+    date.textContent = dateFormat.format(day);
+    head.append(name, date);
+    column.append(head);
+    const dayEvents = inWeek.filter((item) => sameDay(new Date(item.scheduled_at), day))
+      .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at));
+    for (const item of dayEvents) {
+      const card = document.createElement('article');
+      card.className = `week-item status-${item.status}`;
+      const chip = document.createElement('span');
+      chip.className = 'format-chip';
+      chip.textContent = formatChips[item.format] || item.format;
+      const title = document.createElement('b');
+      title.textContent = item.title;
+      const time = document.createElement('small');
+      time.textContent = `◷ ${new Intl.DateTimeFormat('pt-BR', { timeStyle: 'short' }).format(new Date(item.scheduled_at))}`;
+      card.append(chip, title, time);
+      column.append(card);
+    }
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'week-add';
+    add.textContent = '＋ Adicionar conteúdo';
+    add.addEventListener('click', () => openWeekAdd(day));
+    column.append(add);
+    grid.append(column);
+  }
+
+  const steps = [
+    ['Definir temas dos conteúdos', inWeek.length >= 3],
+    ['Produzir e gravar os conteúdos', inWeek.length > 0 && inWeek.every((item) => ['recorded', 'approved', 'published'].includes(item.status))],
+    ['Agendar no calendário', inWeek.length > 0 && inWeek.every((item) => item.scheduled_at)],
+    ['Acompanhar resultados', inWeek.length > 0 && posted === inWeek.length]
+  ];
+  const stepsBox = document.querySelector('#week-steps');
+  stepsBox.replaceChildren();
+  for (const [label, done] of steps) {
+    const row = document.createElement('div');
+    row.className = `week-step${done ? ' done' : ''}`;
+    const mark = document.createElement('span');
+    mark.textContent = done ? '✓' : '';
+    const text = document.createElement('span');
+    text.textContent = label;
+    row.append(mark, text);
+    stepsBox.append(row);
+  }
+  renderQueue();
+}
+
+function renderQueue() {
+  const box = document.querySelector('#content-queue');
+  box.replaceChildren();
+  const group = queueGroups[queueFilter];
+  const items = weekEvents.filter((item) => item.status !== 'published' || queueFilter === 'published')
+    .filter((item) => !group || group.includes(item.status)).slice(0, 12);
+  if (!items.length) {
+    const empty = document.createElement('p');
+    empty.className = 'privacy-note';
+    empty.textContent = 'Nada nesta etapa. Adicione ideias na semana ou gere um plano com a IA.';
+    box.append(empty);
+    return;
+  }
+  for (const item of items) {
+    const card = document.createElement('article');
+    card.className = 'queue-item';
+    const chip = document.createElement('span');
+    chip.className = `queue-status status-${item.status}`;
+    chip.textContent = workflowLabels[item.status] || item.status;
+    const title = document.createElement('b');
+    title.textContent = item.title;
+    const meta = document.createElement('small');
+    meta.textContent = item.scheduled_at
+      ? `${formatChips[item.format] || item.format} · ${new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'short' }).format(new Date(item.scheduled_at))}`
+      : `${formatChips[item.format] || item.format} · sem data`;
+    const next = workflow[Math.min(workflow.length - 1, workflow.indexOf(item.status) + 1)];
+    card.append(chip, title, meta);
+    if (next !== item.status) {
+      const advance = document.createElement('button');
+      advance.type = 'button';
+      advance.className = 'text-button';
+      advance.textContent = `Mover para ${workflowLabels[next]} →`;
+      advance.addEventListener('click', async () => {
+        await updateEvent(item.id, { status: next });
+        await loadWeek();
+      });
+      card.append(advance);
+    }
+    box.append(card);
+  }
+}
+
+function openWeekAdd(day) {
+  weekAddDate = day;
+  document.querySelector('#week-add-day').textContent = new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }).format(day).toUpperCase();
+  document.querySelector('#week-add-dialog').showModal();
+}
+
+document.querySelector('#week-add-close').addEventListener('click', () => document.querySelector('#week-add-dialog').close());
+document.querySelector('#week-add-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const [hours, minutes] = (document.querySelector('#week-add-time').value || '10:00').split(':').map(Number);
+  const when = new Date(weekAddDate);
+  when.setHours(hours, minutes, 0, 0);
+  try {
+    const result = await fetch('/api/calendar/events', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: document.querySelector('#week-add-title').value.trim(), format: document.querySelector('#week-add-format').value,
+        scheduled_at: when.toISOString(), status: 'idea', notes: '' }) });
+    const data = await result.json();
+    if (!result.ok) throw new Error(data.error || 'Não foi possível adicionar.');
+    document.querySelector('#week-add-form').reset();
+    document.querySelector('#week-add-dialog').close();
+    moduleLoaded.calendario = false;
+    await loadWeek();
+    announce('Conteúdo adicionado à semana.');
+  } catch (error) { announce(error.message || 'Não foi possível adicionar.'); }
+});
+
+document.querySelector('#week-prev').addEventListener('click', () => { weekStart.setDate(weekStart.getDate() - 7); renderWeek(); });
+document.querySelector('#week-next').addEventListener('click', () => { weekStart.setDate(weekStart.getDate() + 7); renderWeek(); });
+document.querySelector('#week-today').addEventListener('click', () => { weekStart = startOfWeek(new Date()); renderWeek(); });
+document.querySelectorAll('.queue-filter').forEach((button) => button.addEventListener('click', () => {
+  queueFilter = button.dataset.filter;
+  document.querySelectorAll('.queue-filter').forEach((item) => item.classList.toggle('active', item === button));
+  renderQueue();
+}));
 
 const campaignStatusLabels = { prospecting: 'Mirando', draft: 'Rascunho', submitted: 'Proposta enviada', negotiation: 'Negociando', in_progress: 'Em andamento', delivered: 'Entregue', completed: 'Concluída', archived: 'Arquivada' };
 const campaignStageOptions = ['prospecting', 'negotiation', 'in_progress', 'delivered', 'completed', 'archived'];

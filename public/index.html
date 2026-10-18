@@ -121,7 +121,29 @@
           </section>
 
           <section class="studio-view" id="view-planejamento" hidden>
-            <div class="studio-heading"><div><p class="eyebrow">PLANEJAMENTO EDITORIAL</p><h1>Uma semana de ideias com direção.</h1><p class="intro">Gere um plano para revisar, adaptar e levar ao calendário quando fizer sentido.</p></div><div class="quota-card"><span class="quota-icon">▤</span><div><b id="plan-quota">Carregando limite…</b><small id="plan-plan">Planos editoriais do seu espaço</small></div></div></div>
+            <div class="studio-heading"><div><p class="eyebrow">PLANEJAMENTO</p><h1>Planejamento</h1><p class="intro">Organize suas ideias, planeje sua semana e mantenha uma presença consistente.</p></div><div class="week-nav"><button class="button button-outline" id="week-prev" type="button" aria-label="Semana anterior">‹</button><b id="week-label">Semana atual</b><button class="button button-outline" id="week-next" type="button" aria-label="Próxima semana">›</button><button class="button button-outline" id="week-today" type="button">Hoje</button></div></div>
+            <div class="week-summary panel">
+              <div class="week-summary-item"><span class="bar-icon">◎</span><div><small>Objetivo da semana</small><b id="week-objective">Defina no plano semanal abaixo</b></div></div>
+              <div class="week-summary-item"><span class="bar-icon">▦</span><div><small>Frequência de postagens</small><b id="week-frequency">0 conteúdos na semana</b><em id="week-average">Adicione conteúdos nos dias abaixo</em></div></div>
+              <div class="week-summary-item"><span class="bar-icon">▮</span><div><small>Progresso da semana</small><b id="week-progress-label">0 de 0 postados</b><div class="progress-bar"><i id="week-progress-bar" style="width:0%"></i></div></div></div>
+            </div>
+            <div class="planning-layout">
+              <section class="panel"><div class="panel-title"><h2>▦ Calendário da semana</h2></div><div id="week-grid" class="week-grid"></div></section>
+              <div class="studio-side">
+                <section class="panel"><div class="panel-title"><h2>◎ Plano da semana</h2></div><div id="week-steps" class="check-list"></div></section>
+                <section class="panel"><div class="panel-title"><h2>◷ Melhores horários</h2></div><p class="privacy-note">Aparecem quando o seu Instagram estiver conectado, com base em quando seus seguidores estão online.</p></section>
+              </div>
+            </div>
+            <section class="panel queue-panel"><div class="panel-title"><div><h2>☰ Fila de conteúdo</h2><p class="privacy-note">Acompanhe o status dos seus próximos conteúdos.</p></div><div class="queue-filters" id="queue-filters"><button type="button" class="queue-filter active" data-filter="all">Todos</button><button type="button" class="queue-filter" data-filter="idea">Ideia</button><button type="button" class="queue-filter" data-filter="draft">Em roteiro</button><button type="button" class="queue-filter" data-filter="recorded">Gravado</button><button type="button" class="queue-filter" data-filter="published">Publicado</button></div></div><div id="content-queue" class="content-queue"></div></section>
+            <dialog class="campaign-dialog" id="week-add-dialog">
+              <form class="studio-form" id="week-add-form" method="dialog">
+                <div class="panel-title"><div><p class="eyebrow" id="week-add-day">NOVO CONTEÚDO</p><h2>Adicionar conteúdo</h2></div><button class="close-button" type="button" id="week-add-close" aria-label="Fechar">×</button></div>
+                <label for="week-add-title">Título</label><input id="week-add-title" maxlength="140" required placeholder="Ex.: Rotina da manhã como criadora">
+                <div class="form-cols"><div><label for="week-add-format">Formato</label><select id="week-add-format"><option>Reels (vídeo curto)</option><option>Stories</option><option>Carrossel</option><option>UGC</option><option>TikTok</option><option>Shorts</option><option>Live</option><option>Outro</option></select></div><div><label for="week-add-time">Horário</label><input id="week-add-time" type="time" value="10:00"></div></div>
+                <button class="button button-primary" type="submit">Adicionar à semana <span>→</span></button>
+              </form>
+            </dialog>
+            <p class="eyebrow planning-sub">GERAR COM A IA · <span id="plan-quota">Carregando limite…</span> · <span id="plan-plan">Planos editoriais do seu espaço</span></p>
             <div class="studio-grid">
               <form class="panel studio-form" id="plan-form"><div class="panel-title"><div><p class="eyebrow">NOVO PLANO SEMANAL</p><h2>Defina o foco da semana</h2></div></div><label for="plan-objective">Objetivo (opcional)</label><textarea id="plan-objective" maxlength="500" rows="4" placeholder="Ex.: apresentar minha rotina de skincare sem promessas de resultado"></textarea><label for="plan-start-date">Início da semana</label><input id="plan-start-date" type="date" required><button class="button button-primary" id="generate-plan" type="submit"><span>✦</span> Gerar plano editorial <span>→</span></button><p class="privacy-note">O plano usa seu nicho, objetivos e voz salvos. Cada sugestão é um rascunho; não usa métricas indisponíveis e não publica conteúdo.</p></form>
               <div class="panel"><div class="panel-title"><div><p class="eyebrow">PLANOS SALVOS</p><h2>Sua pauta semanal</h2></div><span class="soft-icon">▤</span></div><div id="plan-list" class="calendar-list"><div class="script-empty"><span>▤</span><b>Seu plano aparece aqui.</b><p>Gere uma semana de ideias e ajuste cada sugestão antes de usar.</p></div></div></div>
