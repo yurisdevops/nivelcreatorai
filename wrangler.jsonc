@@ -7,7 +7,7 @@
     { "pattern": "creator.nivelstudio.com.br", "custom_domain": true }
   ],
   "vars": {
-    "GEMINI_PROVIDER": "vertex",
+    "GEMINI_PROVIDER": "gemini-api",
     "GOOGLE_CLOUD_PROJECT": "project-38cc0da1-19e8-40bf-9f6",
     "GOOGLE_CLOUD_LOCATION": "global",
     "DATA_RETENTION_ENABLED": "false",
