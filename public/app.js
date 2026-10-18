@@ -904,8 +904,51 @@ document.querySelector('#calendar-form').addEventListener('submit', async (event
   } catch (error) { announce(error.message || 'Não foi possível adicionar à agenda.'); }
 });
 
-const campaignStatuses = ['draft', 'submitted', 'negotiation', 'in_progress', 'delivered', 'completed', 'archived'];
-const campaignStatusLabels = { draft: 'Rascunho', submitted: 'Enviada', negotiation: 'Em negociação', in_progress: 'Em andamento', delivered: 'Entregue', completed: 'Concluída', archived: 'Arquivada' };
+const campaignStatusLabels = { prospecting: 'Mirando', draft: 'Rascunho', submitted: 'Proposta enviada', negotiation: 'Negociando', in_progress: 'Em andamento', delivered: 'Entregue', completed: 'Concluída', archived: 'Arquivada' };
+const campaignStageOptions = ['prospecting', 'negotiation', 'in_progress', 'delivered', 'completed', 'archived'];
+const campaignGroups = {
+  active: ['draft', 'submitted', 'negotiation', 'in_progress'],
+  prospecting: ['prospecting'],
+  done: ['delivered', 'completed'],
+  all: null
+};
+let campaignCache = [];
+let selectedCampaignId = null;
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function formatCampaignDate(value) {
+  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(`${value}T12:00:00`));
+}
+
+function daysUntil(value) {
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
+  return Math.round((new Date(`${value}T12:00:00`) - today) / 86400000);
+}
+
+function campaignProgress(campaign) {
+  const total = campaign.deliverables.length;
+  const done = campaign.deliverables.filter((item) => item.done).length;
+  return { total, done, percent: total ? Math.round((done / total) * 100) : 0 };
+}
+
+async function saveCampaign(id, changes) {
+  const result = await fetch(`/api/campaigns/${id}`, { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(changes) });
+  const payload = await result.json().catch(() => ({}));
+  if (result.status === 401) { location.href = '/entrar.html?redirect=%2F'; return false; }
+  if (!result.ok) throw new Error(payload.error || 'Não foi possível atualizar a campanha.');
+  const campaign = campaignCache.find((item) => item.id === id);
+  if (campaign) Object.assign(campaign, changes);
+  renderCampaignStats();
+  renderCampaigns();
+  return true;
+}
 
 async function loadCampaigns() {
   try {
@@ -913,73 +956,178 @@ async function loadCampaigns() {
     const data = await result.json();
     if (result.status === 401) { location.href = '/entrar.html?redirect=%2F'; return; }
     if (!result.ok) throw new Error(data.error || 'Não foi possível carregar as campanhas.');
-    renderCampaigns(data.campaigns);
-    document.querySelector('#campaign-count').textContent = `${data.campaigns.length} campanhas registradas`;
+    campaignCache = data.campaigns;
+    if (!campaignCache.some((item) => item.id === selectedCampaignId)) selectedCampaignId = campaignCache[0]?.id || null;
+    renderCampaignStats();
+    renderCampaigns();
+    renderCampaignContacts();
     moduleLoaded.campanhas = true;
   } catch (error) { announce(error.message || 'Entre na sua conta para acessar campanhas.'); }
 }
 
-function renderCampaigns(campaigns) {
+function renderCampaignStats() {
+  const active = campaignCache.filter((item) => campaignGroups.active.includes(item.status));
+  const prospecting = campaignCache.filter((item) => item.status === 'prospecting').length;
+  const deliverables = active.flatMap((item) => item.deliverables);
+  document.querySelector('#campaign-stat-active').textContent = String(active.length);
+  document.querySelector('#campaign-stat-prospecting').textContent = `${prospecting} em prospecção`;
+  document.querySelector('#campaign-stat-pending').textContent = String(deliverables.filter((item) => !item.done).length);
+  document.querySelector('#campaign-stat-done').textContent = `${deliverables.filter((item) => item.done).length} concluídos`;
+  const next = active.filter((item) => item.due_at && daysUntil(item.due_at) >= 0).sort((a, b) => a.due_at.localeCompare(b.due_at))[0];
+  document.querySelector('#campaign-stat-due').textContent = next ? (daysUntil(next.due_at) === 0 ? 'Hoje' : `${daysUntil(next.due_at)} dias`) : '—';
+  document.querySelector('#campaign-stat-due-date').textContent = next ? `${formatCampaignDate(next.due_at)} · ${next.brand_name}` : 'Sem prazos';
+}
+
+function renderCampaigns() {
   const list = document.querySelector('#campaign-list');
   list.replaceChildren();
-  if (!campaigns.length) {
-    const empty = document.createElement('div');
-    empty.className = 'script-empty';
-    empty.innerHTML = '<span>◇</span><b>As parcerias começam com um briefing.</b><p>Nenhuma campanha registrada neste espaço.</p>';
+  const group = campaignGroups[document.querySelector('#campaign-filter').value];
+  const visible = campaignCache.filter((item) => !group || group.includes(item.status));
+  if (!visible.length) {
+    const empty = el('div', 'script-empty');
+    empty.append(el('span', '', '◇'), el('b', '', campaignCache.length ? 'Nada nesta etapa.' : 'Sua primeira parceria começa aqui.'),
+      el('p', '', campaignCache.length ? 'Troque o filtro acima para ver outras campanhas.' : 'Registre uma marca que você está mirando ou uma campanha já fechada.'));
     list.append(empty);
+  }
+  for (const campaign of visible) {
+    const progress = campaignProgress(campaign);
+    const card = el('button', `campaign-card${campaign.id === selectedCampaignId ? ' selected' : ''}`);
+    card.type = 'button';
+    const head = el('div', 'campaign-card-head');
+    const names = el('div');
+    names.append(el('b', '', campaign.brand_name), el('small', '', campaign.title));
+    head.append(el('span', 'brand-initial', campaign.brand_name.trim().charAt(0).toUpperCase()), names,
+      el('span', `status-chip status-${campaign.status}`, campaignStatusLabels[campaign.status] || campaign.status));
+    const due = el('small', 'campaign-due', campaign.due_at ? `Entrega: ${formatCampaignDate(campaign.due_at)}` : 'Sem prazo definido');
+    const bar = el('div', 'progress-bar');
+    const fill = el('i');
+    fill.style.width = `${progress.percent}%`;
+    bar.append(fill);
+    const meta = el('div', 'campaign-card-meta');
+    meta.append(el('small', '', `${progress.done}/${progress.total} entregáveis`), el('small', '', `${progress.percent}%`));
+    card.append(head, due, bar, meta);
+    card.addEventListener('click', () => { selectedCampaignId = campaign.id; renderCampaigns(); });
+    list.append(card);
+  }
+  renderCampaignDetail();
+}
+
+function checkItems(container, items, onChange) {
+  items.forEach((item, index) => {
+    const label = el('label', 'check-item');
+    const input = el('input');
+    input.type = 'checkbox';
+    input.checked = item.done;
+    input.addEventListener('change', () => onChange(items.map((entry, position) => position === index ? { ...entry, done: input.checked } : entry)));
+    label.append(input, el('span', '', item.text));
+    container.append(label);
+  });
+}
+
+function renderCampaignDetail() {
+  const detail = document.querySelector('#campaign-detail');
+  const checklistBox = document.querySelector('#campaign-checklist');
+  const checklistCount = document.querySelector('#campaign-checklist-count');
+  const campaign = campaignCache.find((item) => item.id === selectedCampaignId);
+  detail.replaceChildren();
+  checklistBox.replaceChildren();
+  checklistCount.textContent = '';
+  if (!campaign) {
+    const empty = el('div', 'script-empty');
+    empty.append(el('span', '', '◇'), el('b', '', 'Escolha ou crie uma campanha.'), el('p', '', 'O briefing, os entregáveis e o contato da marca aparecem aqui.'));
+    detail.append(empty);
+    checklistBox.append(el('p', 'privacy-note', 'Selecione uma campanha.'));
     return;
   }
-  for (const campaign of campaigns) {
-    const card = document.createElement('article');
-    card.className = 'calendar-event';
-    const heading = document.createElement('div');
-    heading.className = 'calendar-event-heading';
-    const title = document.createElement('b');
-    title.textContent = campaign.title;
-    const brand = document.createElement('small');
-    brand.textContent = campaign.brand_name;
-    heading.append(title, brand);
-    const due = document.createElement('small');
-    due.className = 'calendar-event-format';
-    due.textContent = campaign.due_at ? `Prazo: ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(`${campaign.due_at}T12:00:00`))}` : 'Sem prazo definido';
-    const deliverables = document.createElement('ul');
-    for (const item of campaign.deliverables || []) {
-      const li = document.createElement('li');
-      li.textContent = item;
-      deliverables.append(li);
-    }
-    const notes = document.createElement('p');
-    notes.textContent = campaign.notes || '';
-    const status = document.createElement('select');
-    status.setAttribute('aria-label', `Status de ${campaign.title}`);
-    for (const value of campaignStatuses) {
-      const option = document.createElement('option');
-      option.value = value;
-      option.textContent = campaignStatusLabels[value];
-      option.selected = value === campaign.status;
-      status.append(option);
-    }
-    status.addEventListener('change', async () => {
-      try {
-        const result = await fetch(`/api/campaigns/${campaign.id}`, { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ status: status.value }) });
-        const payload = await result.json();
-        if (!result.ok) throw new Error(payload.error || 'Não foi possível atualizar a campanha.');
-        announce('Status da campanha atualizado.');
-      } catch (error) { announce(error.message || 'Não foi possível atualizar.'); await loadCampaigns(); }
-    });
-    card.append(heading, due, deliverables, notes, status);
-    list.append(card);
+  const fail = (error) => { announce(error.message); loadCampaigns(); };
+  const head = el('div', 'campaign-detail-head');
+  const names = el('div');
+  names.append(el('h2', '', campaign.brand_name), el('small', '', campaign.title));
+  const status = el('select');
+  status.setAttribute('aria-label', `Etapa de ${campaign.title}`);
+  for (const value of new Set([...campaignStageOptions, campaign.status])) {
+    const option = el('option', '', campaignStatusLabels[value] || value);
+    option.value = value;
+    option.selected = value === campaign.status;
+    status.append(option);
+  }
+  status.addEventListener('change', () => saveCampaign(campaign.id, { status: status.value })
+    .then(() => announce('Etapa da campanha atualizada.')).catch(fail));
+  head.append(el('span', 'brand-initial large', campaign.brand_name.trim().charAt(0).toUpperCase()), names, status);
+  detail.append(head);
+
+  const block = (icon, title) => {
+    const section = el('section', 'detail-block');
+    const heading = el('h3');
+    heading.append(el('span', '', icon), document.createTextNode(` ${title}`));
+    section.append(heading);
+    detail.append(section);
+    return section;
+  };
+  block('▤', 'Briefing da marca').append(el('p', '', campaign.notes || 'Nenhum briefing registrado ainda.'));
+
+  const deliverablesBlock = block('☑', 'Entregáveis');
+  if (!campaign.deliverables.length) deliverablesBlock.append(el('p', '', 'Nenhum entregável registrado.'));
+  checkItems(deliverablesBlock, campaign.deliverables, (deliverables) => saveCampaign(campaign.id, { deliverables }).catch(fail));
+
+  const dueBlock = block('▦', 'Prazo');
+  if (campaign.due_at) {
+    const days = daysUntil(campaign.due_at);
+    const when = days > 0 ? `(em ${days} dias)` : days === 0 ? '(hoje)' : `(atrasado ${Math.abs(days)} dias)`;
+    const line = el('p');
+    line.append(document.createTextNode('Entrega final: '), el('b', 'accent', `${formatCampaignDate(campaign.due_at)} ${when}`));
+    dueBlock.append(line);
+  } else dueBlock.append(el('p', '', 'Sem prazo definido.'));
+
+  const contactBlock = block('☎', 'Contato na marca');
+  const contactLines = campaign.contact
+    ? [campaign.contact.name, campaign.contact.email, campaign.contact.instagram && `@${campaign.contact.instagram}`].filter(Boolean)
+    : [];
+  if (!contactLines.length) contactLines.push('Nenhum contato salvo.');
+  for (const value of contactLines) contactBlock.append(el('p', '', value));
+
+  checklistCount.textContent = `${campaign.checklist.filter((item) => item.done).length}/${campaign.checklist.length}`;
+  checkItems(checklistBox, campaign.checklist, (checklist) => saveCampaign(campaign.id, { checklist }).catch(fail));
+}
+
+function renderCampaignContacts() {
+  const box = document.querySelector('#campaign-contacts');
+  box.replaceChildren();
+  const seen = new Set();
+  const contacts = campaignCache.filter((item) => item.contact).filter((item) => {
+    const key = `${item.brand_name}|${item.contact.email || item.contact.instagram || item.contact.name}`.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  if (!contacts.length) { box.append(el('p', 'privacy-note', 'Os contatos que você salvar nas campanhas aparecem aqui.')); return; }
+  for (const item of contacts) {
+    const row = el('div', 'contact-row');
+    const info = el('div');
+    info.append(el('b', '', item.contact.name || item.brand_name),
+      el('small', '', [item.brand_name, item.contact.email, item.contact.instagram && `@${item.contact.instagram}`].filter(Boolean).join(' · ')));
+    row.append(el('span', 'brand-initial', item.brand_name.trim().charAt(0).toUpperCase()), info);
+    box.append(row);
   }
 }
 
+const campaignDialog = document.querySelector('#campaign-dialog');
+document.querySelector('#campaign-new').addEventListener('click', () => campaignDialog.showModal());
+document.querySelector('#campaign-dialog-close').addEventListener('click', () => campaignDialog.close());
+document.querySelector('#campaign-filter').addEventListener('change', () => renderCampaigns());
+
 document.querySelector('#campaign-form').addEventListener('submit', async (event) => {
   event.preventDefault();
-  const due = document.querySelector('#campaign-due').value;
+  const value = (id) => document.querySelector(id).value.trim();
+  const contact = { name: value('#campaign-contact-name'), email: value('#campaign-contact-email'), instagram: value('#campaign-contact-instagram') };
   const body = {
-    brand_name: document.querySelector('#campaign-brand').value.trim(),
-    title: document.querySelector('#campaign-title').value.trim(),
+    brand_name: value('#campaign-brand'),
+    title: value('#campaign-title'),
+    status: document.querySelector('#campaign-status').value,
     deliverables: document.querySelector('#campaign-deliverables').value.split('\n').map((item) => item.trim()).filter(Boolean),
-    due_at: due || null, notes: document.querySelector('#campaign-notes').value.trim()
+    due_at: document.querySelector('#campaign-due').value || null,
+    notes: value('#campaign-notes'),
+    contact: contact.name || contact.email || contact.instagram ? contact : null
   };
   try {
     const result = await fetch('/api/campaigns', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
@@ -987,7 +1135,10 @@ document.querySelector('#campaign-form').addEventListener('submit', async (event
     if (result.status === 401) { location.href = '/entrar.html?redirect=%2F'; return; }
     if (!result.ok) throw new Error(data.error || 'Não foi possível salvar a campanha.');
     document.querySelector('#campaign-form').reset();
-    moduleLoaded.campanhas = false;
+    campaignDialog.close();
+    selectedCampaignId = data.id;
+    const group = Object.entries(campaignGroups).find(([, statuses]) => statuses?.includes(body.status))?.[0] || 'all';
+    document.querySelector('#campaign-filter').value = group;
     await loadCampaigns();
     announce('Campanha registrada no seu espaço.');
   } catch (error) { announce(error.message || 'Não foi possível salvar.'); }

@@ -23,9 +23,9 @@
           <a class="nav-link" href="#planejamento" data-view="planejamento"><span>▤</span> Planejamento</a>
           <a class="nav-link" href="#calendario" data-view="calendario"><span>▦</span> Calendário</a>
           <a class="nav-link" href="#campanhas" data-view="campanhas"><span>◇</span> Campanhas UGC</a>
-          <a class="nav-link" href="#biblioteca" data-view="biblioteca"><span>▱</span> Biblioteca</a>
-          <a class="nav-link" href="#resultados" data-view="resultados"><span>⌁</span> Seus resultados</a>
-          <a class="nav-link" href="#comunidade" data-view="comunidade"><span>♧</span> Comunidade</a>
+          <a class="nav-link" href="#biblioteca" data-view="biblioteca" hidden><span>▱</span> Biblioteca</a>
+          <a class="nav-link" href="#resultados" data-view="resultados" hidden><span>⌁</span> Seus resultados</a>
+          <a class="nav-link" href="#comunidade" data-view="comunidade" hidden><span>♧</span> Comunidade</a>
           <a class="nav-link" href="#agente" data-view="agente"><span>✦</span> Agente pessoal</a>
         </nav>
         <div class="sidebar-bottom">
@@ -107,11 +107,32 @@
           </section>
 
           <section class="studio-view" id="view-campanhas" hidden>
-            <div class="studio-heading"><div><p class="eyebrow">CAMPANHAS UGC</p><h1>Parcerias organizadas, do seu jeito.</h1><p class="intro">Registre briefings, entregáveis, prazos e feedback real de cada marca.</p></div><div class="quota-card"><span class="quota-icon">◇</span><div><b id="campaign-count">Carregando campanhas…</b><small>Registros do seu espaço</small></div></div></div>
-            <div class="studio-grid">
-              <form class="panel studio-form" id="campaign-form"><div class="panel-title"><div><p class="eyebrow">NOVA PARCERIA</p><h2>Registre um briefing</h2></div></div><label for="campaign-brand">Marca</label><input id="campaign-brand" maxlength="120" required placeholder="Nome da marca"><label for="campaign-title">Campanha</label><input id="campaign-title" maxlength="160" required placeholder="Nome do projeto ou produto"><label for="campaign-deliverables">Entregáveis (um por linha)</label><textarea id="campaign-deliverables" rows="4" maxlength="1500" placeholder="1 Reel\n3 Stories"></textarea><label for="campaign-due">Prazo (opcional)</label><input id="campaign-due" type="date"><label for="campaign-notes">Observações e feedback</label><textarea id="campaign-notes" maxlength="1500" rows="3" placeholder="Anote somente o briefing e feedback recebidos."></textarea><button class="button button-primary" type="submit">Salvar campanha <span>→</span></button></form>
-              <div class="panel"><div class="panel-title"><div><p class="eyebrow">SEU PORTFÓLIO DE PARCERIAS</p><h2>Campanhas em andamento</h2></div><span class="soft-icon">◇</span></div><div id="campaign-list" class="calendar-list"><div class="script-empty"><span>◇</span><b>As parcerias começam com um briefing.</b><p>Nenhuma campanha registrada neste espaço.</p></div></div></div>
+            <div class="studio-heading"><div><p class="eyebrow">CAMPANHAS UGC</p><h1>Campanhas UGC</h1><p class="intro">Gerencie suas parcerias com marcas, acompanhe prazos e entregue seu melhor conteúdo.</p></div><button class="button button-primary" id="campaign-new" type="button">＋ Nova campanha</button></div>
+            <div class="campaign-stats">
+              <article class="campaign-stat"><span class="stat-icon green">◇</span><div><small>Campanhas ativas</small><b id="campaign-stat-active">0</b><em id="campaign-stat-prospecting">0 em prospecção</em></div></article>
+              <article class="campaign-stat"><span class="stat-icon violet">▶</span><div><small>Entregáveis pendentes</small><b id="campaign-stat-pending">0</b><em id="campaign-stat-done">0 concluídos</em></div></article>
+              <article class="campaign-stat"><span class="stat-icon blue">▦</span><div><small>Prazo mais próximo</small><b id="campaign-stat-due">—</b><em id="campaign-stat-due-date">Sem prazos</em></div></article>
             </div>
+            <div class="campaign-layout">
+              <section class="panel campaign-column"><div class="panel-title"><h2>Minhas campanhas</h2><select id="campaign-filter" aria-label="Filtrar campanhas"><option value="active">Ativas</option><option value="prospecting">Mirando</option><option value="done">Entregues</option><option value="all">Todas</option></select></div><div id="campaign-list" class="campaign-list"></div></section>
+              <section class="panel campaign-detail" id="campaign-detail"><div class="script-empty"><span>◇</span><b>Escolha ou crie uma campanha.</b><p>O briefing, os entregáveis e o contato da marca aparecem aqui.</p></div></section>
+              <div class="campaign-side">
+                <section class="panel"><div class="panel-title"><h2>Checklist de gravação</h2><span class="checklist-count" id="campaign-checklist-count"></span></div><div id="campaign-checklist" class="check-list"><p class="privacy-note">Selecione uma campanha.</p></div></section>
+                <section class="panel"><div class="panel-title"><h2>Contatos de marcas</h2></div><div id="campaign-contacts" class="contact-list"><p class="privacy-note">Os contatos que você salvar nas campanhas aparecem aqui.</p></div></section>
+              </div>
+            </div>
+            <dialog class="campaign-dialog" id="campaign-dialog">
+              <form class="studio-form" id="campaign-form" method="dialog">
+                <div class="panel-title"><div><p class="eyebrow">NOVA PARCERIA</p><h2 id="campaign-dialog-title">Registrar campanha</h2></div><button class="close-button" type="button" id="campaign-dialog-close" aria-label="Fechar">×</button></div>
+                <div class="form-cols"><div><label for="campaign-brand">Marca</label><input id="campaign-brand" maxlength="120" required placeholder="Nome da marca"></div><div><label for="campaign-title">Produto ou campanha</label><input id="campaign-title" maxlength="160" required placeholder="Ex.: Sérum Facial Chronos"></div></div>
+                <div class="form-cols"><div><label for="campaign-status">Etapa</label><select id="campaign-status"><option value="prospecting">Mirando</option><option value="negotiation">Negociando</option><option value="in_progress">Fechada · em andamento</option><option value="delivered">Entregue</option></select></div><div><label for="campaign-due">Prazo de entrega (opcional)</label><input id="campaign-due" type="date"></div></div>
+                <label for="campaign-deliverables">Entregáveis (um por linha)</label><textarea id="campaign-deliverables" rows="3" maxlength="1500" placeholder="1 vídeo principal (Reels) até 60s&#10;3 stories com menção à marca"></textarea>
+                <label for="campaign-notes">Briefing e observações da marca</label><textarea id="campaign-notes" maxlength="1500" rows="4" placeholder="Cole aqui o briefing e o que a marca pediu."></textarea>
+                <p class="form-section">Contato na marca (opcional)</p>
+                <div class="form-cols three"><div><label for="campaign-contact-name">Nome</label><input id="campaign-contact-name" maxlength="80"></div><div><label for="campaign-contact-email">E-mail</label><input id="campaign-contact-email" type="email" maxlength="254"></div><div><label for="campaign-contact-instagram">Instagram</label><input id="campaign-contact-instagram" maxlength="31" placeholder="@marca"></div></div>
+                <button class="button button-primary" type="submit">Salvar campanha <span>→</span></button>
+              </form>
+            </dialog>
           </section>
 
           <section class="studio-view" id="view-diagnostico" hidden>
