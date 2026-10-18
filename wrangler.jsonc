@@ -3,6 +3,9 @@
   "name": "nivel-creator-ai",
   "main": "src/index.js",
   "compatibility_date": "2026-05-03",
+  "routes": [
+    { "pattern": "creator.nivelstudio.com.br", "custom_domain": true }
+  ],
   "vars": {
     "GEMINI_PROVIDER": "vertex",
     "GOOGLE_CLOUD_PROJECT": "project-38cc0da1-19e8-40bf-9f6",
