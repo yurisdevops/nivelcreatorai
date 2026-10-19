@@ -76,22 +76,20 @@
               <label class="studio-bar-item"><span class="bar-icon">▮</span><div><small>Seu objetivo</small><select id="studio-objective"><option>Aumentar o engajamento</option><option>Ganhar seguidores</option><option>Mostrar meu trabalho para marcas</option><option>Vender um produto</option><option>Ter mais consistência</option></select></div></label>
               <label class="studio-bar-item"><span class="bar-icon">▶</span><div><small>Formato de conteúdo</small><select id="creative-format"><option>Reels (vídeo curto)</option><option>Stories</option><option>TikTok</option><option>Shorts</option></select></div></label>
             </div>
-            <div class="studio-layout">
-              <form class="panel studio-form" id="idea-form">
+            <div class="settings-tabs studio-tabs" role="tablist" aria-label="Seções do estúdio"><button type="button" role="tab" class="settings-tab active" data-studio-tab="ideas" aria-selected="true">💡 Ideias</button><button type="button" role="tab" class="settings-tab" data-studio-tab="campaign" aria-selected="false">◇ Roteiro de campanha</button><button type="button" role="tab" class="settings-tab" data-studio-tab="saved" aria-selected="false">▤ Meus roteiros</button></div>
+            <div class="studio-pane" data-pane="ideas">
+              <div class="studio-ideas-top"><form class="panel studio-form" id="idea-form">
                 <div class="panel-title"><div><h2>✦ Pedido rápido</h2><p class="privacy-note">Descreva o que você precisa e a IA sugere 3 ideias.</p></div></div>
                 <textarea id="idea-request" maxlength="500" rows="5" placeholder="Ex.: quero 3 ideias de Reels para skincare"></textarea>
                 <div class="field-meta"><small>Opcional: sem pedido, a IA usa seu nicho e objetivo.</small><small><span id="idea-count">0</span>/500</small></div>
                 <button class="button button-primary generate-button" id="generate-ideas" type="submit"><span>✦</span> Gerar ideias agora <span>→</span></button>
                 <p class="examples-label">Exemplos de pedidos:</p>
                 <div class="example-chips"><button type="button" class="example-chip">3 ideias de Reels para o meu nicho</button><button type="button" class="example-chip">Conteúdos educativos para iniciantes</button><button type="button" class="example-chip">Ideias de stories para engajar</button><button type="button" class="example-chip">Roteiros para mostrar um produto que eu uso</button></div>
-              </form>
-              <div class="studio-center">
-                <section class="panel"><div class="panel-title"><div><h2>💡 Ideias sugeridas pela IA</h2><p class="privacy-note">Personalizadas para o seu nicho e objetivo.</p></div></div><div id="idea-grid" class="idea-results"><div class="script-empty compact"><span>💡</span><b>Suas ideias aparecem aqui.</b><p>Use o pedido rápido ao lado.</p></div></div></section>
-                <section class="panel" id="selected-script-panel"><div class="panel-title"><div><h2>▤ Roteiro selecionado</h2><p class="privacy-note" id="selected-script-title">Escolha uma ideia e clique em "Ver roteiro".</p></div><button class="button button-outline" id="copy-script" type="button" disabled>Copiar roteiro</button></div><div id="selected-script" class="script-steps"></div></section>
-              </div>
-              <div class="studio-side">
-                <section class="panel"><div class="panel-title"><h2>Por que a IA sugeriu isso?</h2></div><div id="idea-why" class="why-list"><p class="privacy-note">As justificativas das ideias aparecem aqui.</p></div></section>
-                <form class="panel studio-form" id="campaign-script-form">
+              </form><section class="panel"><div class="panel-title"><div><h2>💡 Ideias sugeridas pela IA</h2><p class="privacy-note">Personalizadas para o seu nicho e objetivo.</p></div></div><div id="idea-grid" class="idea-results"><div class="script-empty compact"><span>💡</span><b>Suas ideias aparecem aqui.</b><p>Use o pedido rápido ao lado.</p></div></div></section></div>
+              <section class="panel"><div class="panel-title"><h2>Por que a IA sugeriu isso?</h2></div><div id="idea-why" class="why-list"><p class="privacy-note">As justificativas das ideias aparecem aqui.</p></div></section>
+            </div>
+            <div class="studio-pane" data-pane="campaign" hidden>
+              <form class="panel studio-form" id="campaign-script-form">
                   <div class="panel-title"><div><h2>◇ Roteiro de campanha</h2><p class="privacy-note">Escrito a partir da <b>sua opinião</b> sobre o produto. Nunca um roteiro padrão.</p></div></div>
                   <label for="script-campaign">Campanha</label><select id="script-campaign"><option value="">Carregando campanhas…</option></select>
                   <label for="opinion-liked">Do que você gostou no produto?</label><textarea id="opinion-liked" maxlength="600" rows="2" placeholder="Ex.: a textura é leve e não deixou minha pele oleosa"></textarea>
@@ -99,9 +97,11 @@
                   <label for="opinion-experience">Como foi usar no seu dia a dia?</label><textarea id="opinion-experience" maxlength="800" rows="2" placeholder="Ex.: usei por 10 dias de manhã, antes da maquiagem"></textarea>
                   <button class="button button-primary generate-button" id="generate-campaign-script" type="submit"><span>✦</span> Gerar roteiro da campanha <span>→</span></button>
                 </form>
-              </div>
             </div>
-            <section class="panel studio-results"><div class="panel-title"><div><p class="eyebrow">SEUS ROTEIROS</p><h2>Salvos para revisar</h2></div><span class="soft-icon">▤</span></div><div id="script-list" class="script-list"><div class="script-empty"><span>✧</span><b>Seu próximo roteiro começa com uma ideia.</b><p>Gere ideias ou um roteiro de campanha acima.</p></div></div></section>
+            <div class="studio-pane" data-pane="saved" hidden>
+              <section class="panel studio-results"><div class="panel-title"><div><p class="eyebrow">SEUS ROTEIROS</p><h2>Salvos para revisar</h2></div><span class="soft-icon">▤</span></div><div id="script-list" class="script-list"><div class="script-empty"><span>✧</span><b>Seu próximo roteiro começa com uma ideia.</b><p>Gere ideias ou um roteiro de campanha acima.</p></div></div></section>
+            </div>
+            <div class="studio-selected"><section class="panel" id="selected-script-panel"><div class="panel-title"><div><h2>▤ Roteiro selecionado</h2><p class="privacy-note" id="selected-script-title">Escolha uma ideia e clique em "Ver roteiro".</p></div><button class="button button-outline" id="copy-script" type="button" disabled>Copiar roteiro</button></div><div id="selected-script" class="script-steps"></div></section></div>
           </section>
 
           <section class="studio-view" id="view-calendario" hidden>

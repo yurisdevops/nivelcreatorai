@@ -1608,6 +1608,7 @@ async function generateCampaignChecklist(campaign, button) {
 
 function openCampaignInStudio(campaignId) {
   document.querySelector('.nav-link[data-view="roteiros"]').click();
+  showStudioTab('campaign');
   const pick = () => {
     const select = document.querySelector('#script-campaign');
     if ([...select.options].some((option) => option.value === campaignId)) {
@@ -2485,3 +2486,15 @@ document.addEventListener('click', (event) => {
   field.dispatchEvent(new Event('input', { bubbles: true }));
   field.focus();
 });
+
+// The creative studio shows one task at a time; the selected script stays visible under ideas and campaign.
+function showStudioTab(name) {
+  document.querySelectorAll('[data-studio-tab]').forEach((tab) => {
+    const active = tab.dataset.studioTab === name;
+    tab.classList.toggle('active', active);
+    tab.setAttribute('aria-selected', String(active));
+  });
+  document.querySelectorAll('.studio-pane').forEach((pane) => { pane.hidden = pane.dataset.pane !== name; });
+  document.querySelector('.studio-selected').hidden = name === 'saved';
+}
+document.querySelectorAll('[data-studio-tab]').forEach((tab) => tab.addEventListener('click', () => showStudioTab(tab.dataset.studioTab)));
