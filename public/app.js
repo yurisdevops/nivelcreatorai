@@ -708,6 +708,7 @@ function renderSelectedScript(script) {
   document.querySelector('#selected-script-title').textContent = [script.title, ...extras].join(' · ');
   document.querySelectorAll('.script-option').forEach((option) => option.classList.toggle('active', option.dataset.id === script.id));
   document.querySelector('#copy-script').disabled = false;
+  document.querySelector('#teleprompter-open').disabled = false;
   const steps = [
     ['1', 'Hook', [script.hook]],
     ['2', 'Desenvolvimento', (script.scenes || []).map((scene) => `${scene.moment}: ${scene.speech}`)],
@@ -2661,3 +2662,4 @@ document.querySelector('#push-test').addEventListener('click', async () => {
     announce('Aviso de teste enviado. Ele chega em alguns segundos.');
   } catch (error) { announce(error.message); }
 });
+document.querySelector('#teleprompter-open').addEventListener('click', () => { if (selectedScript) window.openTeleprompter?.(selectedScript); });

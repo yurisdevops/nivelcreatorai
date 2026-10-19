@@ -26,7 +26,7 @@ const securityHeaders = {
   "x-content-type-options": "nosniff",
   "x-frame-options": "DENY",
   "strict-transport-security": "max-age=31536000",
-  "permissions-policy": "camera=(), microphone=(), geolocation=()"
+  "permissions-policy": "camera=(self), microphone=(self), geolocation=()"
 };
 
 const rateLimitedAuthPaths = new Set([
