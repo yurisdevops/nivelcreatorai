@@ -9,7 +9,7 @@ import { creativeHandler } from "./creative.js";
 import { calendarHandler } from "./calendar.js";
 import { agentHandler } from "./agent.js";
 import { campaignsHandler } from "./campaigns.js";
-import { diagnosticsHandler } from "./diagnostics.js";
+import { diagnosticsHandler, runWeeklyDiagnostics } from "./diagnostics.js";
 import { planningHandler } from "./planning.js";
 import { dashboardHandler } from "./dashboard.js";
 import { notificationCronHandler, notificationHandler } from "./notifications.js";
@@ -439,6 +439,6 @@ export default {
   async scheduled(_event, env, ctx) {
     ctx.waitUntil(Promise.all([notificationCronHandler(env), processDeletionQueue(env), processAsaasQueue(env),
       reconcileAsaasSubscriptions(env),
-      refreshInstagramTokens(env), syncInstagramInsights(env)]));
+      refreshInstagramTokens(env), syncInstagramInsights(env), runWeeklyDiagnostics(env)]));
   }
 };
