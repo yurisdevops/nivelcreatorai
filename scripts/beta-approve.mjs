@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const EMAIL = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/;
 const emails = process.argv.slice(2).map((value) => value.trim().toLowerCase());
@@ -30,9 +31,10 @@ if (result.status === 0) {
   console.log(`Aprovado(s) para o beta: ${emails.join(", ")}`);
   // Print the Instagram handles from the waitlist, ready to add as Instagram testers in the Meta dashboard.
   const list = emails.map((email) => `'${email}'`).join(",");
-  const handles = spawnSync("npx", ["wrangler", "d1", "execute", "nivel-creator", "--remote", "--json",
-    `--command=SELECT email, instagram FROM waitlist_entries WHERE email IN (${list})`],
-    { encoding: "utf8", shell: process.platform === "win32" });
+  // Run wrangler through Node directly so the SQL stays one argument on every OS (no shell splitting).
+  const wranglerBin = fileURLToPath(new URL("../node_modules/wrangler/bin/wrangler.js", import.meta.url));
+  const handles = spawnSync(process.execPath, [wranglerBin, "d1", "execute", "nivel-creator", "--remote", "--json",
+    "--command", `SELECT email, instagram FROM waitlist_entries WHERE email IN (${list})`], { encoding: "utf8" });
   try {
     const rows = JSON.parse(handles.stdout.slice(handles.stdout.indexOf("[")))[0].results;
     console.log("");
