@@ -25,3 +25,11 @@ test("the public media kit escapes creator text and hides unpublished pages", as
   assert.equal(await renderPublicMediaKit({ DB: db(null) }, "ana.ugc"), null);
   assert.equal(await renderPublicMediaKit({ DB: db(row) }, "../etc"), null);
 });
+
+test("media kit portfolio accepts only https links and up to 8 works", () => {
+  const kit = cleanMediaKit({ ...base, portfolio_url: "https://drive.google.com/x", portfolio: [{ title: "Review", url: "https://www.instagram.com/reel/abc/" }] });
+  assert.equal(kit.portfolio.length, 1);
+  assert.throws(() => cleanMediaKit({ ...base, portfolio: [{ title: "x", url: "javascript:alert(1)" }] }), AuthError);
+  assert.throws(() => cleanMediaKit({ ...base, portfolio_url: "http://inseguro.example" }), AuthError);
+  assert.throws(() => cleanMediaKit({ ...base, portfolio: Array.from({ length: 9 }, () => ({ url: "https://a.example" })) }), AuthError);
+});

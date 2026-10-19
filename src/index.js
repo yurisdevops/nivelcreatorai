@@ -402,7 +402,7 @@ export default {
 
       if (url.pathname.startsWith("/api/creative/") || url.pathname.startsWith("/api/calendar/") ||
           url.pathname.startsWith("/api/plans") ||
-          url.pathname.startsWith("/api/agent/") || url.pathname.startsWith("/api/campaigns") || url.pathname === "/api/media-kit") {
+          url.pathname.startsWith("/api/agent/") || url.pathname.startsWith("/api/campaigns") || url.pathname.startsWith("/api/media-kit")) {
         if (!isProviderConfigured(env)) throw new AuthError(503, "Configure Supabase Auth e D1 para usar esta área.");
         const { user, cookies } = await requireUser(request, env);
         const workspace = await getWorkspace(env, user.id);

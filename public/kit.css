@@ -17,3 +17,10 @@
 .kit-brands{display:flex;flex-wrap:wrap;gap:8px}
 .kit-brands span{padding:8px 14px;border:1px solid var(--line);border-radius:999px;background:#ffffff08}
 .kit .foot{margin-top:32px}
+.kit-portfolio{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.kit-work{display:grid;gap:6px;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--panel-2);text-decoration:none}
+.kit-work:hover{border-color:var(--lilac)}
+.kit-work-icon{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:#7b3fff33;color:var(--lilac);font-size:18px}
+.kit-work b{font-size:1rem}
+.kit-work small{color:var(--muted)}
+.kit-portfolio-link{margin-top:14px}

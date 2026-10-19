@@ -2578,6 +2578,9 @@ async function loadMediaKit() {
     document.querySelector('#mk-delivered').checked = kit ? kit.show_delivered_brands : true;
     document.querySelector('#mk-metrics').checked = kit ? kit.show_metrics : true;
     document.querySelector('#mk-published').checked = Boolean(kit?.published);
+    document.querySelector('#mk-portfolio-url').value = kit?.portfolio_url || '';
+    document.querySelector('#mk-portfolio').value = (kit?.portfolio || []).map((item) => `${item.title} | ${item.url}`).join('\n');
+    if (!kit) await autofillMediaKit(false);
     showMediaKitLink(kit);
     moduleLoaded.mediakit = true;
   } catch { announce('Não foi possível carregar o media kit.'); }
@@ -2593,7 +2596,13 @@ document.querySelector('#mediakit-form').addEventListener('submit', async (event
     brands: lines(document.querySelector('#mk-brands').value).slice(0, 20),
     show_delivered_brands: document.querySelector('#mk-delivered').checked,
     show_metrics: document.querySelector('#mk-metrics').checked,
-    published: document.querySelector('#mk-published').checked
+    published: document.querySelector('#mk-published').checked,
+    portfolio_url: document.querySelector('#mk-portfolio-url').value.trim(),
+    portfolio: lines(document.querySelector('#mk-portfolio').value).slice(0, 8).map((line) => {
+      const [title, ...rest] = line.split('|');
+      const url = rest.length ? rest.join('|').trim() : title.trim();
+      return { title: rest.length ? title.trim() : '', url };
+    })
   };
   try {
     const result = await fetch('/api/media-kit', { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
@@ -2675,3 +2684,27 @@ document.querySelector('#push-test').addEventListener('click', async () => {
   } catch (error) { announce(error.message); }
 });
 document.querySelector('#teleprompter-open').addEventListener('click', () => { if (selectedScript) window.openTeleprompter?.(selectedScript); });
+
+// Fills empty media kit fields from the profile, Instagram connection and delivered campaigns.
+async function autofillMediaKit(overwrite = true) {
+  try {
+    const result = await fetch('/api/media-kit/suggestion', { credentials: 'same-origin' });
+    if (!result.ok) return;
+    const { suggestion } = await result.json();
+    const fill = (selector, value) => {
+      const field = document.querySelector(selector);
+      if (value && (overwrite || !field.value.trim())) field.value = value;
+    };
+    fill('#mk-name', suggestion.display_name);
+    fill('#mk-slug', suggestion.slug);
+    fill('#mk-bio', suggestion.bio);
+    fill('#mk-email', suggestion.contact_email);
+    fill('#mk-instagram', suggestion.instagram ? `@${suggestion.instagram}` : '');
+    fill('#mk-highlights', suggestion.highlights.join('\n'));
+    if (overwrite) announce('Media kit preenchido com os dados do seu perfil. Revise, ajuste e salve.');
+  } catch { if (overwrite) announce('Não foi possível preencher automaticamente.'); }
+}
+document.querySelector('#mediakit-autofill').addEventListener('click', () => {
+  if (document.querySelector('#mk-bio').value.trim() && !confirm('Substituir o que já está preenchido pelos dados do seu perfil?')) return;
+  autofillMediaKit(true);
+});
