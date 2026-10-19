@@ -169,6 +169,7 @@
           <button type="button" class="tp-faster" aria-label="Mais rápido">+</button>
           <button type="button" class="tp-next" aria-label="Próxima cena">⏭</button>
           <span class="tp-speed">1x</span>
+          <button type="button" class="tp-mirror" aria-pressed="false" title="Espelhar a imagem (só na tela)">⇋</button>
           <button type="button" class="tp-record" disabled>● Gravar</button>
           <a class="tp-download" hidden>⇩ Baixar</a>
         </div>
@@ -176,6 +177,11 @@
     layer.querySelector('.tp-title').textContent = script.title || 'Roteiro';
     const speedLabel = layer.querySelector('.tp-speed');
     const setSpeed = (value) => { speed = Math.min(2.5, Math.max(0.5, Math.round(value * 100) / 100)); speedLabel.textContent = `${speed}x`; };
+    // The preview matches the saved video by default; mirroring is optional and only changes the screen.
+    layer.querySelector('.tp-mirror').addEventListener('click', (event) => {
+      const mirrored = layer.classList.toggle('mirrored');
+      event.currentTarget.setAttribute('aria-pressed', String(mirrored));
+    });
     layer.querySelector('.tp-close').addEventListener('click', close);
     layer.querySelector('.tp-play').addEventListener('click', () => setPlaying(!playing));
     layer.querySelector('.tp-prev').addEventListener('click', () => goTo(current - 1));
