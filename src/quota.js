@@ -9,7 +9,7 @@ export function entitlementFromRow(row, now = Date.now()) {
   const inPastDueGrace = row.subscription_status === "past_due" && paidPeriodStarted && periodEnd + 72 * 60 * 60 * 1000 > now;
   if (hasPaidAccess || inPastDueGrace) {
     const start = row.period_start || row.period_end;
-    return { cycleKey: `subscription:${start}`, limit: 60, plan: "paid" };
+    return { cycleKey: `subscription:${start}`, limit: 30, plan: "paid" };
   }
   const trialStart = Date.parse(row.trial_start || "");
   if (row.trial_status === "trialing" && Number.isFinite(trialStart) && trialStart <= now && Date.parse(row.trial_end) > now) {

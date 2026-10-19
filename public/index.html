@@ -25,6 +25,7 @@
           <a class="nav-link" href="#planejamento" data-view="planejamento"><span>▤</span> Planejamento</a>
           <a class="nav-link" href="#calendario" data-view="calendario"><span>▦</span> Calendário</a>
           <a class="nav-link" href="#campanhas" data-view="campanhas"><span>◇</span> Campanhas UGC</a>
+          <a class="nav-link" href="#mediakit" data-view="mediakit"><span>✦</span> Media kit</a>
           <a class="nav-link" href="#biblioteca" data-view="biblioteca" hidden><span>▱</span> Biblioteca</a>
           <a class="nav-link" href="#resultados" data-view="resultados" hidden><span>⌁</span> Seus resultados</a>
           <a class="nav-link" href="#comunidade" data-view="comunidade" hidden><span>♧</span> Comunidade</a>
@@ -197,6 +198,21 @@
             <section class="diagnostic-history"><div class="panel-title"><div><p class="eyebrow">ANÁLISES SALVAS</p><h2>Seus diagnósticos</h2></div></div><div id="diagnostic-list" class="diagnostic-list"><div class="script-empty"><span>⌕</span><b>Seu diagnóstico aparece aqui quando houver dados.</b><p>Sem métricas disponíveis, não calculamos score nem sugerimos causas.</p></div></div></section>
           </section>
 
+          <section class="studio-view" id="view-mediakit" hidden>
+            <div class="studio-heading"><div><p class="eyebrow">MEDIA KIT</p><h1>Seu media kit</h1><p class="intro">Uma página pública com link próprio para mandar às marcas, com seus números atualizados.</p></div><a class="button button-outline" id="mediakit-open" href="#" target="_blank" rel="noopener" hidden>Ver minha página ↗</a></div>
+            <form class="panel studio-form mediakit-form" id="mediakit-form">
+              <div class="form-cols"><div><label for="mk-name">Nome de exibição</label><input id="mk-name" maxlength="80" required placeholder="Ex.: Mariana Costa"></div><div><label for="mk-slug">Endereço da página</label><div class="slug-field"><span>creator.nivelstudio.com.br/kit/</span><input id="mk-slug" maxlength="30" required placeholder="marianacosta"></div></div></div>
+              <label for="mk-bio">Bio (o que você faz e para quem)</label><textarea id="mk-bio" maxlength="600" rows="3" placeholder="Ex.: Criadora UGC de beleza e skincare. Faço vídeos naturais, do jeito que eu uso no dia a dia."></textarea>
+              <div class="form-cols three"><div><label for="mk-city">Cidade</label><input id="mk-city" maxlength="80" placeholder="Ex.: São Paulo, SP"></div><div><label for="mk-email">E-mail para parcerias</label><input id="mk-email" type="email" maxlength="254" placeholder="voce@email.com"></div><div><label for="mk-instagram">Instagram</label><input id="mk-instagram" maxlength="31" placeholder="@seuperfil"></div></div>
+              <label for="mk-highlights">Destaques (um por linha, até 6)</label><textarea id="mk-highlights" maxlength="1000" rows="3" placeholder="Ex.: Mais de 40 vídeos UGC entregues&#10;Especialista em rotina de skincare"></textarea>
+              <label for="mk-brands">Marcas com quem já trabalhou (uma por linha)</label><textarea id="mk-brands" maxlength="1200" rows="3" placeholder="Natura&#10;Boticário"></textarea>
+              <label class="notification-preference"><input id="mk-delivered" type="checkbox" checked> Incluir automaticamente as marcas das campanhas entregues</label>
+              <label class="notification-preference"><input id="mk-metrics" type="checkbox" checked> Mostrar meus números do Instagram (quando conectado)</label>
+              <label class="notification-preference"><input id="mk-published" type="checkbox"> Publicar a página (qualquer pessoa com o link poderá ver)</label>
+              <button class="button button-primary" type="submit">Salvar media kit <span>→</span></button>
+              <p class="privacy-note" id="mk-status" role="status"></p>
+            </form>
+          </section>
           <section class="studio-view" id="view-configuracoes" hidden>
             <div class="studio-heading"><div><p class="eyebrow">CONFIGURAÇÕES</p><h1>Configurações</h1><p class="intro">Perfil, segurança, assinatura e seus dados.</p></div></div>
             <div class="settings-tabs" role="tablist" aria-label="Seções das configurações"><button type="button" role="tab" class="settings-tab active" data-settings-tab="settings-profile-form" aria-selected="true">Perfil</button><button type="button" role="tab" class="settings-tab" data-settings-tab="mfa-settings-panel" aria-selected="false">Segurança</button><button type="button" role="tab" class="settings-tab" data-settings-tab="account-plan-panel" aria-selected="false">Assinatura</button><button type="button" role="tab" class="settings-tab" data-settings-tab="data-rights-panel" aria-selected="false">Seus dados</button></div>

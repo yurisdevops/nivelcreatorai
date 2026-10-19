@@ -18,6 +18,7 @@ import { billingHandler, processAsaasQueue, receiveAsaasWebhook, reconcileAsaasS
 import { instagramCallback, instagramHandler, refreshInstagramTokens, syncInstagramInsights } from "./instagram.js";
 import { filesHandler } from "./files.js";
 import { assertBetaApproved, waitlistHandler } from "./waitlist.js";
+import { mediaKitHandler, renderPublicMediaKit } from "./mediakit.js";
 
 const securityHeaders = {
   "content-security-policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data:; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' https://static.cloudflareinsights.com; connect-src 'self' https://cloudflareinsights.com",
@@ -282,6 +283,14 @@ export default {
         if (webhook.status === 200) ctx.waitUntil(processAsaasQueue(env));
         return webhook;
       }
+      const kitMatch = url.pathname.match(/^\/kit\/([^/]+)\/?$/);
+      if (kitMatch && request.method === "GET") {
+        const html = env.DB ? await renderPublicMediaKit(env, decodeURIComponent(kitMatch[1]).toLowerCase()) : null;
+        const headers = new Headers({ "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300" });
+        for (const [name, value] of Object.entries(securityHeaders)) headers.set(name, value);
+        return new Response(html || "<!doctype html><meta charset=utf-8><title>Media kit não encontrado</title><p>Este media kit não existe ou não está publicado.</p>",
+          { status: html ? 200 : 404, headers });
+      }
       if (url.pathname === "/favicon.ico") {
         const icon = await env.ASSETS.fetch(new Request(new URL("/favicon.svg", request.url)));
         return new Response(icon.body, { status: icon.status, headers: { "content-type": "image/svg+xml", "cache-control": "public, max-age=86400" } });
@@ -393,7 +402,7 @@ export default {
 
       if (url.pathname.startsWith("/api/creative/") || url.pathname.startsWith("/api/calendar/") ||
           url.pathname.startsWith("/api/plans") ||
-          url.pathname.startsWith("/api/agent/") || url.pathname.startsWith("/api/campaigns")) {
+          url.pathname.startsWith("/api/agent/") || url.pathname.startsWith("/api/campaigns") || url.pathname === "/api/media-kit") {
         if (!isProviderConfigured(env)) throw new AuthError(503, "Configure Supabase Auth e D1 para usar esta área.");
         const { user, cookies } = await requireUser(request, env);
         const workspace = await getWorkspace(env, user.id);
@@ -405,6 +414,7 @@ export default {
         if (!result) result = await calendarHandler(request, env, url.pathname, workspace);
         if (!result) result = await planningHandler(request, env, url.pathname, workspace);
         if (!result) result = await agentHandler(request, env, url.pathname, workspace);
+        if (!result) result = await mediaKitHandler(request, env, url.pathname, workspace);
         if (!result) result = await campaignsHandler(request, env, url.pathname, workspace);
         if (result) return response(result, 200, cookies);
       }

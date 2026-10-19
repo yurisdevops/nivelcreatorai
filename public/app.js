@@ -11,7 +11,8 @@ const moduleViews = {
   resultados: document.querySelector('#view-resultados'),
   campanhas: document.querySelector('#view-campanhas'),
   agente: document.querySelector('#view-agente'),
-  configuracoes: document.querySelector('#view-configuracoes')
+  configuracoes: document.querySelector('#view-configuracoes'),
+  mediakit: document.querySelector('#view-mediakit')
 };
 const homeSections = [...contentWrap.children].filter((element) => !Object.values(moduleViews).includes(element));
 let toastTimer;
@@ -278,11 +279,11 @@ viewLinks.forEach((link) => link.addEventListener('click', (event) => {
   window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
 }));
 
-const moduleLoaded = { roteiros: false, diagnostico: false, planejamento: false, calendario: false, biblioteca: false, resultados: false, campanhas: false, agente: false, configuracoes: false };
+const moduleLoaded = { roteiros: false, diagnostico: false, planejamento: false, calendario: false, biblioteca: false, resultados: false, campanhas: false, agente: false, configuracoes: false, mediakit: false };
 function showModule(name) {
   homeSections.forEach((element) => { element.hidden = true; });
   Object.entries(moduleViews).forEach(([key, element]) => { element.hidden = key !== name; });
-  const labels = { roteiros: 'Estúdio Criativo', diagnostico: 'Diagnóstico IA', planejamento: 'Planejamento', calendario: 'Calendário', biblioteca: 'Biblioteca', resultados: 'Seus resultados', campanhas: 'Campanhas UGC', agente: 'Agente pessoal', configuracoes: 'Configurações' };
+  const labels = { roteiros: 'Estúdio Criativo', diagnostico: 'Diagnóstico IA', planejamento: 'Planejamento', calendario: 'Calendário', biblioteca: 'Biblioteca', resultados: 'Seus resultados', campanhas: 'Campanhas UGC', agente: 'Agente pessoal', configuracoes: 'Configurações', mediakit: 'Media kit' };
   document.querySelector('.crumb').innerHTML = `Seu espaço <span>/</span> ${labels[name]}`;
   if (moduleLoaded[name]) return;
   if (name === 'roteiros') { loadScripts(); loadScriptCampaigns(); }
@@ -294,6 +295,7 @@ function showModule(name) {
   if (name === 'campanhas') loadCampaigns();
   if (name === 'agente') loadAgent();
   if (name === 'configuracoes') loadSettings();
+  if (name === 'mediakit') loadMediaKit();
 }
 
 const resultMetricLabels = {
@@ -2537,3 +2539,56 @@ function showStudioTab(name) {
   document.querySelector('.studio-selected').hidden = name === 'saved';
 }
 document.querySelectorAll('[data-studio-tab]').forEach((tab) => tab.addEventListener('click', () => showStudioTab(tab.dataset.studioTab)));
+
+// Media kit: a public page the creator shares with brands.
+function lines(value) { return value.split('\n').map((item) => item.trim()).filter(Boolean); }
+function showMediaKitLink(kit) {
+  const link = document.querySelector('#mediakit-open');
+  link.hidden = !(kit && kit.published);
+  if (kit) link.href = `/kit/${kit.slug}`;
+}
+async function loadMediaKit() {
+  try {
+    const result = await fetch('/api/media-kit', { credentials: 'same-origin' });
+    if (result.status === 401) { location.href = '/entrar.html?redirect=%2F'; return; }
+    const { kit } = await result.json();
+    const name = document.querySelector('#current-user')?.textContent || '';
+    document.querySelector('#mk-name').value = kit?.display_name || '';
+    document.querySelector('#mk-slug').value = kit?.slug || name.split('@')[0].toLowerCase().replace(/[^a-z0-9._-]/g, '').slice(0, 30);
+    document.querySelector('#mk-bio').value = kit?.bio || '';
+    document.querySelector('#mk-city').value = kit?.city || '';
+    document.querySelector('#mk-email').value = kit?.contact_email || '';
+    document.querySelector('#mk-instagram').value = kit?.instagram ? `@${kit.instagram}` : '';
+    document.querySelector('#mk-highlights').value = (kit?.highlights || []).join('\n');
+    document.querySelector('#mk-brands').value = (kit?.brands || []).join('\n');
+    document.querySelector('#mk-delivered').checked = kit ? kit.show_delivered_brands : true;
+    document.querySelector('#mk-metrics').checked = kit ? kit.show_metrics : true;
+    document.querySelector('#mk-published').checked = Boolean(kit?.published);
+    showMediaKitLink(kit);
+    moduleLoaded.mediakit = true;
+  } catch { announce('Não foi possível carregar o media kit.'); }
+}
+document.querySelector('#mediakit-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const status = document.querySelector('#mk-status');
+  const body = {
+    display_name: document.querySelector('#mk-name').value, slug: document.querySelector('#mk-slug').value,
+    bio: document.querySelector('#mk-bio').value, city: document.querySelector('#mk-city').value,
+    contact_email: document.querySelector('#mk-email').value, instagram: document.querySelector('#mk-instagram').value,
+    highlights: lines(document.querySelector('#mk-highlights').value).slice(0, 6),
+    brands: lines(document.querySelector('#mk-brands').value).slice(0, 20),
+    show_delivered_brands: document.querySelector('#mk-delivered').checked,
+    show_metrics: document.querySelector('#mk-metrics').checked,
+    published: document.querySelector('#mk-published').checked
+  };
+  try {
+    const result = await fetch('/api/media-kit', { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await result.json();
+    if (!result.ok) throw new Error(data.error || 'Não foi possível salvar o media kit.');
+    showMediaKitLink({ slug: body.slug.trim().toLowerCase().replace(/^@/, ''), published: body.published });
+    status.textContent = body.published
+      ? `Publicado em creator.nivelstudio.com.br${data.url}. Copie o link e mande para as marcas.`
+      : 'Salvo como rascunho. Marque "Publicar a página" quando quiser compartilhar.';
+    announce('Media kit salvo.');
+  } catch (error) { status.textContent = error.message; announce(error.message); }
+});

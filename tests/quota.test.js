@@ -10,7 +10,7 @@ test("paid entitlement takes precedence over an overlapping trial", () => {
     subscription_status: "active", period_start: "2026-10-15T11:00:00.000Z", period_end: "2026-11-15T11:00:00.000Z"
   }, now);
 
-  assert.deepEqual(entitlement, { cycleKey: "subscription:2026-10-15T11:00:00.000Z", limit: 60, plan: "paid" });
+  assert.deepEqual(entitlement, { cycleKey: "subscription:2026-10-15T11:00:00.000Z", limit: 30, plan: "paid" });
 });
 
 test("trial remains available through its exact UTC end and expires at the boundary", () => {
@@ -32,7 +32,7 @@ test("manual Pix paid cycle uses the same paid entitlement as a card cycle", () 
     subscription_status: "active", period_start: "2026-10-15T10:00:00.000Z", period_end: "2026-11-15T10:00:00.000Z" };
 
   assert.equal(entitlementFromRow(row, now).plan, "paid");
-  assert.equal(entitlementFromRow(row, now).limit, 60);
+  assert.equal(entitlementFromRow(row, now).limit, 30);
 });
 
 test("future trial does not grant access early", () => {
