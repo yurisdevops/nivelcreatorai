@@ -12,6 +12,13 @@ let mfaEnrollmentRequired = false;
 let enrollmentFactorId = '';
 let selectedPlan = 'trial';
 
+// Status messages show as a clear success or error box above the button.
+function notify(text, type = 'error') {
+  message.textContent = text;
+  message.className = text ? `form-message ${type}` : 'form-message';
+  if (text) message.scrollIntoView({ block: 'nearest' });
+}
+
 function updatePlanSelection() {
   const note = document.querySelector('#selected-plan-note');
   const title = document.querySelector('#selected-plan-name');
@@ -101,9 +108,9 @@ function setMode(nextMode) {
   mfaRequired = false;
   mfaEnrollmentRequired = false;
   enrollmentFactorId = '';
-  document.querySelector('label[for="email"]').hidden = false;
-  document.querySelector('#email').hidden = false;
-  document.querySelector('#email').required = true;
+  document.querySelector('label[for="email"]').hidden = passwordReset;
+  document.querySelector('#email').hidden = passwordReset;
+  document.querySelector('#email').required = !passwordReset;
   document.querySelector('#password').hidden = recoveryRequest;
   document.querySelector('label[for="password"]').hidden = recoveryRequest;
   document.querySelector('#mfa-login-group').hidden = true;
@@ -126,7 +133,7 @@ function setMode(nextMode) {
   document.querySelector('#confirm-password-group').hidden = !passwordReset;
   document.querySelector('#confirm-password').required = passwordReset;
   document.querySelector('#forgot-password').hidden = !loginLike;
-  message.textContent = '';
+  notify('');
 }
 
 loginTab.addEventListener('click', () => setMode('login'));
@@ -180,19 +187,19 @@ const query = new URLSearchParams(location.search);
 if (query.has('redefinir')) showAccess('reset');
 else if (query.has('verificado')) {
   showAccess('login');
-  message.textContent = 'E-mail confirmado. Agora entre com sua senha.';
+  notify('E-mail confirmado. Agora entre com sua senha.', 'success');
 } else if (query.get('senha') === 'atualizada') {
   showAccess('login');
-  message.textContent = 'Senha atualizada. Entre com sua nova senha.';
+  notify('Senha atualizada. Entre com sua nova senha.', 'success');
 } else if (query.get('erro') === 'confirmacao') {
   showAccess('login');
-  message.textContent = 'O link não funcionou ou expirou. Solicite uma nova confirmação.';
+  notify('O link não funcionou ou expirou. Solicite uma nova confirmação.');
 } else if (query.get('erro') === 'redefinicao') {
   showAccess('login');
-  message.textContent = 'O link de recuperação expirou ou não foi concluído. Solicite outro link.';
+  notify('O link de recuperação expirou ou não foi concluído. Solicite outro link.');
 } else if (query.get('erro') === 'configuracao') {
   showAccess('login');
-  message.textContent = 'A autenticação ainda não está configurada neste ambiente.';
+  notify('A autenticação ainda não está configurada neste ambiente.');
 }
 
 fetch('/api/auth/status', { credentials: 'same-origin' }).then(async (result) => {
@@ -220,7 +227,7 @@ form.addEventListener('submit', async (event) => {
     if (!ready) return;
   const email = document.querySelector('#email').value.trim();
   const password = document.querySelector('#password').value;
-  message.textContent = '';
+  notify('');
   submit.disabled = true;
     submit.textContent = mode === 'signup' ? 'Criando sua conta…' : mode === 'recover' ? 'Enviando…' : mode === 'reset' ? 'Atualizando…' : 'Verificando…';
   try {
@@ -255,7 +262,7 @@ form.addEventListener('submit', async (event) => {
       const result = await fetch('/api/auth/recover', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email }) });
       const data = await result.json();
       if (!result.ok) throw new Error(data.error || 'Não foi possível solicitar a recuperação.');
-      message.textContent = 'Se este e-mail tiver uma conta, enviaremos as instruções de recuperação.';
+      notify(`Pronto! Se ${email} tiver uma conta, o link para criar uma nova senha chega em alguns minutos. Confira também o spam.`, 'success');
       return;
     }
     if (mode === 'reset') {
@@ -273,6 +280,9 @@ form.addEventListener('submit', async (event) => {
       body: JSON.stringify({ email, password })
     });
     const data = await result.json();
+    if (mode === 'login' && result.status === 401) {
+      throw new Error('E-mail ou senha incorretos. Confira e tente de novo, ou clique em "Esqueci minha senha". Se acabou de criar a conta, confirme o e-mail antes.');
+    }
     if (!result.ok) throw new Error(data.error || 'Não foi possível concluir. Tente novamente.');
     if (mode === 'login' && data.mfa_setup_required) {
       showMfaEnrollment();
@@ -283,9 +293,7 @@ form.addEventListener('submit', async (event) => {
       return;
     }
     if (mode === 'signup' && data.verification_required) {
-      message.textContent = selectedPlan === 'pro'
-        ? 'Conta criada. Confirme seu e-mail para iniciar o trial de 7 dias. Depois, você poderá revisar e confirmar o plano Pro em Configurações.'
-        : 'Conta criada. Confira seu e-mail para confirmar o endereço e iniciar seu trial grátis de 7 dias.';
+      notify(`Conta criada! 🎉 Enviamos um link de confirmação para ${email}. Abra o e-mail e clique em "Confirmar" para começar seus 7 dias grátis.`, 'success');
       form.reset();
       return;
     }
@@ -293,7 +301,7 @@ form.addEventListener('submit', async (event) => {
     const destination = requestedPath.startsWith('/') && !requestedPath.startsWith('//') ? requestedPath : '/';
     location.assign(destination);
   } catch (error) {
-    message.textContent = error.message || 'Serviço indisponível. Tente novamente em instantes.';
+    notify(error.message || 'Serviço indisponível. Tente novamente em instantes.');
   } finally {
     submit.disabled = !ready;
     submit.innerHTML = mfaEnrollmentRequired ? 'Ativar autenticador <span>→</span>' : mfaRequired ? 'Confirmar código <span>→</span>' : mode === 'signup' ? 'Criar minha conta <span>→</span>' : mode === 'recover' ? 'Enviar link de recuperação <span>→</span>' : mode === 'reset' ? 'Salvar nova senha <span>→</span>' : 'Entrar <span>→</span>';
