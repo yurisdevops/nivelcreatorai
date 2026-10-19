@@ -78,7 +78,7 @@ async function fetchJson(url, options = {}) {
   let value;
   try { value = await response.json(); } catch { value = null; }
   if (!response.ok || !value || typeof value !== "object" || value.error) {
-    const error = new Error(`provider_error ${response.status} ${String(value?.error?.message || value?.error_message || "").slice(0, 160)}`);
+    const error = new Error(`provider_error ${response.status} ${String(value?.error?.message || value?.error_message || "").replace(/[A-Za-z0-9_-]{40,}/g, "[token]").slice(0, 160)}`);
     const graphCode = Number(value?.error?.code);
     if (response.status === 401 || [102, 190].includes(graphCode)) error.code = "instagram_token_invalid";
     else if (response.status === 403 || [10, 200].includes(graphCode)) error.code = "instagram_permission_denied";
@@ -334,6 +334,15 @@ export async function syncInstagramInsights(env) {
         }
         permissionError ||= error?.code === "instagram_permission_denied";
         /* Follower count may be unavailable for accounts below Meta's privacy threshold. */
+      }
+      if (followers === null) {
+        // The profile field is the current total; the insight metric is not returned for every account.
+        try {
+          const profileUrl = new URL(`${GRAPH_ORIGIN}/${apiVersion(env)}/me`);
+          profileUrl.search = new URLSearchParams({ fields: "followers_count", access_token: token }).toString();
+          const profile = await fetchJson(profileUrl);
+          if (Number.isFinite(Number(profile.followers_count))) followers = Number(profile.followers_count);
+        } catch { /* Keep followers marked as unavailable. */ }
       }
       let profileVisits = null;
       try {

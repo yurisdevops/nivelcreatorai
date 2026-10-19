@@ -158,7 +158,7 @@ test("missing Instagram insights permission marks the connection for reauthoriza
     return Response.json({ error: { code: 200, message: `Missing permission for ${accessToken}` } }, { status: 400 });
   }, async () => syncInstagramInsights(env));
 
-  assert.equal(calls, 3);
+  assert.equal(calls, 4);
   const batch = env.state.batches[0];
   assert.equal(batch.length, 6);
   const unavailable = batch.slice(0, 5);
