@@ -78,7 +78,7 @@ async function fetchJson(url, options = {}) {
   let value;
   try { value = await response.json(); } catch { value = null; }
   if (!response.ok || !value || typeof value !== "object" || value.error) {
-    const error = new Error("provider_error");
+    const error = new Error(`provider_error ${response.status} ${String(value?.error?.message || value?.error_message || "").slice(0, 160)}`);
     const graphCode = Number(value?.error?.code);
     if (response.status === 401 || [102, 190].includes(graphCode)) error.code = "instagram_token_invalid";
     else if (response.status === 403 || [10, 200].includes(graphCode)) error.code = "instagram_permission_denied";
@@ -189,7 +189,8 @@ export async function instagramCallback(request, env) {
         .bind(crypto.randomUUID(), claimed.workspace_id, profile.id, JSON.stringify({ username: profile.username, scopes: REQUIRED_SCOPES }))
     ]);
     return redirectResult(request, "conectado");
-  } catch {
+  } catch (error) {
+    console.error("instagram_callback_error", { code: error?.code || null, message: String(error?.message || "").slice(0, 200) });
     return redirectResult(request, "erro");
   }
 }
