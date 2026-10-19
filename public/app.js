@@ -433,9 +433,33 @@ function renderScripts(scripts) {
     captionTitle.textContent = 'Legenda sugerida';
     const caption = document.createElement('p');
     caption.textContent = script.caption;
-    card.append(badge, title, hookLabel, hook, scenesTitle, scenes, cta, captionTitle, caption);
-    title.tabIndex = 0;
-    title.addEventListener('click', () => renderSelectedScript(script));
+    // Saved scripts start collapsed; the header toggles the full text.
+    card.classList.add('collapsed');
+    const header = document.createElement('div');
+    header.className = 'script-card-header';
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'script-toggle';
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.append(badge, title);
+    toggle.addEventListener('click', () => {
+      const open = card.classList.toggle('collapsed') === false;
+      toggle.setAttribute('aria-expanded', String(open));
+      if (open) renderSelectedScript(script);
+    });
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'text-button danger-link';
+    remove.textContent = 'Excluir';
+    remove.addEventListener('click', async () => {
+      if (!confirm(`Excluir o roteiro "${script.title}"?`)) return;
+      if (await deleteResource(`/api/creative/scripts/${script.id}`)) { announce('Roteiro excluído.'); card.remove(); }
+    });
+    header.append(toggle, remove);
+    const body = document.createElement('div');
+    body.className = 'script-card-body';
+    body.append(hookLabel, hook, scenesTitle, scenes, cta, captionTitle, caption);
+    card.append(header, body);
     if (Array.isArray(script.checklist) && script.checklist.length) {
       const checklistTitle = document.createElement('b');
       checklistTitle.textContent = 'Checklist de gravação';
@@ -446,13 +470,13 @@ function renderScripts(scripts) {
         item.textContent = entry;
         checklist.append(item);
       }
-      card.append(checklistTitle, checklist);
+      body.append(checklistTitle, checklist);
     }
     if (script.hashtags?.length) {
       const tags = document.createElement('small');
       tags.className = 'script-tags';
       tags.textContent = script.hashtags.join(' ');
-      card.append(tags);
+      body.append(tags);
     }
     list.append(card);
   }

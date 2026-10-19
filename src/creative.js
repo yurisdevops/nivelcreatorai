@@ -215,6 +215,16 @@ async function generateIdeas(env, account, profile, body) {
 }
 
 export async function creativeHandler(request, env, path, account) {
+  const scriptMatch = path.match(/^\/api\/creative\/scripts\/([0-9a-f-]{36})$/i);
+  if (scriptMatch) {
+    if (request.method !== "DELETE") throw new AuthError(405, "Método não permitido.");
+    assertSameOrigin(request);
+    // Deleting a script keeps its usage record, so the cycle quota stays honest.
+    const result = await env.DB.prepare("DELETE FROM scripts WHERE id=?1 AND workspace_id=?2")
+      .bind(scriptMatch[1], account.workspace_id).run();
+    if (!result.meta?.changes) throw new AuthError(404, "Este roteiro não foi encontrado no seu espaço.");
+    return { deleted: true };
+  }
   if (path !== "/api/creative/scripts" && path !== "/api/creative/generate" && path !== "/api/creative/ideas") return null;
   if (path === "/api/creative/ideas" && request.method !== "POST") throw new AuthError(405, "Método não permitido.");
   if (path === "/api/creative/scripts" && request.method !== "GET") throw new AuthError(405, "Método não permitido.");
