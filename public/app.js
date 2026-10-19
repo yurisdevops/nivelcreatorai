@@ -193,10 +193,16 @@ document.querySelector('#next-onboarding').addEventListener('click', () => {
   setOnboardingStep(currentOnboardingStep + 1);
 });
 
+const INSTAGRAM_CONSENT_QUESTION = [
+  'Para mostrar seus números, o Nível Creator vai ler dados básicos e métricas da sua conta profissional do Instagram (seguidores, alcance, interações). Nada é publicado e você pode desconectar quando quiser.',
+  'Na próxima tela, entre com a sua conta do Instagram (o e-mail pode ser diferente do daqui).',
+  'Autoriza?'
+].join('\n\n');
 document.querySelector('#onboarding-connect-instagram').addEventListener('click', () => {
-  if (!document.querySelector('#onboarding-instagram-consent').checked) {
-    announce('Confirme a autorização para ler dados básicos e insights do Instagram.');
-    return;
+  const onboardingConsent = document.querySelector('#onboarding-instagram-consent');
+  if (!onboardingConsent.checked) {
+    if (!confirm(INSTAGRAM_CONSENT_QUESTION)) return;
+    onboardingConsent.checked = true;
   }
   document.querySelector('#instagram-insights-consent').checked = true;
   dialog.close();
@@ -2031,9 +2037,11 @@ async function loadInstagramConnection() {
 }
 
 document.querySelector('#connect-instagram').addEventListener('click', async (event) => {
-  if (!document.querySelector('#instagram-insights-consent').checked) {
-    announce('Confirme a autorização para ler dados básicos e insights do Instagram.');
-    return;
+  const insightsConsent = document.querySelector('#instagram-insights-consent');
+  if (!insightsConsent.checked) {
+    // Ask in place instead of blocking on a checkbox people miss.
+    if (!confirm(INSTAGRAM_CONSENT_QUESTION)) return;
+    insightsConsent.checked = true;
   }
   const button = event.currentTarget;
   button.disabled = true;
