@@ -59,7 +59,7 @@
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
-    "run_worker_first": ["/", "/index.html", "/api/*", "/auth/*"]
+    "run_worker_first": ["/", "/index.html", "/favicon.ico", "/api/*", "/auth/*"]
   },
   "observability": {
     "enabled": true,

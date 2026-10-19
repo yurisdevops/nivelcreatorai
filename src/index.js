@@ -282,6 +282,10 @@ export default {
         if (webhook.status === 200) ctx.waitUntil(processAsaasQueue(env));
         return webhook;
       }
+      if (url.pathname === "/favicon.ico") {
+        const icon = await env.ASSETS.fetch(new Request(new URL("/favicon.svg", request.url)));
+        return new Response(icon.body, { status: icon.status, headers: { "content-type": "image/svg+xml", "cache-control": "public, max-age=86400" } });
+      }
       if (url.pathname === "/api/health" && request.method === "GET") {
         return response({ status: "ok", service: "nivel-creator-ai" });
       }

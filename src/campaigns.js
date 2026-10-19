@@ -152,6 +152,13 @@ export async function campaignsHandler(request, env, path, account) {
     return generateChecklist(env, account, mapCampaign(row));
   }
   const match = path.match(/^\/api\/campaigns\/([0-9a-f-]{36})$/i);
+  if (match && request.method === "DELETE") {
+    assertSameOrigin(request);
+    const result = await env.DB.prepare("DELETE FROM campaigns WHERE id=?1 AND workspace_id=?2")
+      .bind(match[1], account.workspace_id).run();
+    if (!result.meta?.changes) throw new AuthError(404, "Esta campanha não foi encontrada no seu espaço.");
+    return { deleted: true };
+  }
   if (match && request.method === "PUT") {
     assertSameOrigin(request);
     const data = cleanCampaign(await readJson(request), true);

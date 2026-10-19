@@ -1571,7 +1571,17 @@ function renderCampaignDetail() {
   const edit = el('button', 'button button-outline', '✎ Editar');
   edit.type = 'button';
   edit.addEventListener('click', () => openCampaignDialog(campaign));
-  head.append(el('span', 'brand-initial large', campaign.brand_name.trim().charAt(0).toUpperCase()), names, edit, status);
+  const removeCampaign = el('button', 'button button-outline danger-outline', 'Excluir');
+  removeCampaign.type = 'button';
+  removeCampaign.addEventListener('click', async () => {
+    if (!confirm(`Excluir a campanha "${campaign.brand_name} · ${campaign.title}"? Os roteiros já gerados continuam salvos.`)) return;
+    if (await deleteResource(`/api/campaigns/${campaign.id}`)) {
+      selectedCampaignId = null;
+      announce('Campanha excluída.');
+      await loadCampaigns();
+    }
+  });
+  head.append(el('span', 'brand-initial large', campaign.brand_name.trim().charAt(0).toUpperCase()), names, edit, removeCampaign, status);
   detail.append(head);
   if (!campaignGroups.done.includes(campaign.status) && campaign.status !== 'archived') {
     const scriptButton = el('button', 'button button-primary ai-inline-button', '✦ Gerar roteiro com IA');
