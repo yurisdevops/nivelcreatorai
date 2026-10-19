@@ -1804,7 +1804,7 @@ function renderAgentMessages(messages) {
 }
 
 function renderHomeDashboard(data) {
-  const labels = { reach: 'Alcance', interactions: 'Interações', profile_visits: 'Visitas ao perfil', followers: 'Seguidores' };
+  const labels = { reach: 'Alcance', views: 'Visualizações', interactions: 'Interações', profile_visits: 'Visitas ao perfil', followers: 'Seguidores' };
   for (const [key, label] of Object.entries(labels)) {
     const row = data.metrics[key];
     const value = document.querySelector(`#metric-${key}`);
@@ -1932,7 +1932,9 @@ async function loadHomeCampaigns() {
     const active = campaigns.filter((item) => ['draft', 'submitted', 'negotiation', 'in_progress'].includes(item.status));
     const prospecting = campaigns.filter((item) => item.status === 'prospecting').length;
     const pending = active.flatMap((item) => item.deliverables || []).filter((item) => !item.done).length;
-    const next = active.filter((item) => item.due_at).sort((a, b) => a.due_at.localeCompare(b.due_at))[0];
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const overdue = active.filter((item) => item.due_at && item.due_at < todayIso).length;
+    const next = active.filter((item) => item.due_at && item.due_at >= todayIso).sort((a, b) => a.due_at.localeCompare(b.due_at))[0];
     box.replaceChildren();
     const stats = [[String(active.length), 'ativas'], [String(prospecting), 'mirando'], [String(pending), 'entregáveis pendentes']];
     const row = document.createElement('div');
@@ -1952,6 +1954,7 @@ async function loadHomeCampaigns() {
     note.textContent = next
       ? `Próxima entrega: ${next.brand_name} · ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(`${next.due_at}T12:00:00`))}`
       : campaigns.length ? 'Nenhum prazo próximo.' : 'Registre a primeira marca que você está mirando.';
+    if (overdue) note.textContent += ` · ⚠ ${overdue} ${overdue === 1 ? 'entrega atrasada' : 'entregas atrasadas'}`;
     box.append(note);
   } catch { /* Keep the empty state when campaigns are unavailable. */ }
 }

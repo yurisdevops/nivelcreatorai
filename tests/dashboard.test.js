@@ -31,7 +31,7 @@ test("dashboard leaves unavailable metrics empty instead of inventing values", a
   const result = await dashboardHandler(request(), { DB: dashboardDb() }, "/api/dashboard", account);
 
   assert.deepEqual(result.metrics, {
-    reach: null, interactions: null, profile_visits: null, followers: null
+    followers: null, reach: null, views: null, interactions: null, profile_visits: null
   });
   assert.equal(result.diagnostic, null);
   assert.deepEqual(result.actions, []);

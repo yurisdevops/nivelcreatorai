@@ -1,6 +1,6 @@
 import { AuthError } from "./auth.js";
 
-const METRICS = ["reach", "interactions", "profile_visits", "followers"];
+const METRICS = ["followers", "reach", "views", "interactions", "profile_visits"];
 
 function parseJson(value, fallback) {
   try { return JSON.parse(value); } catch { return fallback; }
