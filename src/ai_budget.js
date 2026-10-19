@@ -114,16 +114,19 @@ export async function requestGemini(env, model, payload, unavailableMessage) {
     ? `https://aiplatform.googleapis.com/v1/projects/${encodeURIComponent(env.GOOGLE_CLOUD_PROJECT)}/locations/${encodeURIComponent(env.GOOGLE_CLOUD_LOCATION || "global")}/publishers/google/models/${encodeURIComponent(model)}:generateContent`
     : `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
   const body = serializeAiRequest(requestPayload);
+  // Keys pasted into a terminal often carry quotes, spaces or line breaks, which make the header invalid.
+  const apiKey = String(env.GEMINI_API_KEY).trim().replace(/^["']|["']$/g, "");
   const probeToken = await acquireCircuitProbe(env);
   let response;
   try {
     response = await fetch(apiUrl, {
-      method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
+      method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
       body, redirect: "error", signal: AbortSignal.timeout(25000)
     });
-  } catch {
+  } catch (error) {
+    console.error("ai_provider_error", { provider, model, kind: error?.name, message: String(error?.message || "").slice(0, 200) });
     await recordCircuitFailure(env, probeToken);
-    throw new AuthError(502, unavailableMessage);
+    throw new AuthError(502, `${unavailableMessage} (falha de conexão: ${error?.name || "erro"})`);
   }
   if (!response.ok) {
     // Log only the provider status and reason so failures can be diagnosed without exposing prompts or keys.
