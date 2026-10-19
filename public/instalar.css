@@ -1,0 +1,10 @@
+.install #install-now{margin:8px 0 20px}
+.install-tabs{display:flex;gap:6px;margin:20px 0 12px;padding:5px;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
+.install-tab{flex:1;padding:12px;border:0;border-radius:10px;background:none;color:var(--muted);font-weight:700;cursor:pointer}
+.install-tab.active{background:linear-gradient(135deg,var(--purple),#5a33e8);color:#fff}
+.install-steps{padding:20px 24px;border:1px solid var(--line);border-radius:18px;background:var(--panel)}
+.install-steps ol{margin:0;padding-left:22px}
+.install-steps li{margin-bottom:14px;color:var(--muted)}
+.install-steps li:last-child{margin-bottom:0}
+.mono{font-family:ui-monospace,Consolas,monospace;color:var(--ink)}
+.install-note{margin-top:20px}

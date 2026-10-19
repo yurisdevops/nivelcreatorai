@@ -2593,3 +2593,5 @@ document.querySelector('#mediakit-form').addEventListener('submit', async (event
     announce('Media kit salvo.');
   } catch (error) { status.textContent = error.message; announce(error.message); }
 });
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
