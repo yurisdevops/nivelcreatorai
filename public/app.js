@@ -1539,7 +1539,10 @@ function renderCampaignDetail() {
   }
   status.addEventListener('change', () => saveCampaign(campaign.id, { status: status.value })
     .then(() => announce('Etapa da campanha atualizada.')).catch(fail));
-  head.append(el('span', 'brand-initial large', campaign.brand_name.trim().charAt(0).toUpperCase()), names, status);
+  const edit = el('button', 'button button-outline', '✎ Editar');
+  edit.type = 'button';
+  edit.addEventListener('click', () => openCampaignDialog(campaign));
+  head.append(el('span', 'brand-initial large', campaign.brand_name.trim().charAt(0).toUpperCase()), names, edit, status);
   detail.append(head);
   if (!campaignGroups.done.includes(campaign.status) && campaign.status !== 'archived') {
     const scriptButton = el('button', 'button button-primary ai-inline-button', '✦ Gerar roteiro com IA');
@@ -1641,7 +1644,31 @@ function renderCampaignContacts() {
 }
 
 const campaignDialog = document.querySelector('#campaign-dialog');
-document.querySelector('#campaign-new').addEventListener('click', () => campaignDialog.showModal());
+let editingCampaignId = null;
+function openCampaignDialog(campaign = null) {
+  editingCampaignId = campaign?.id || null;
+  const form = document.querySelector('#campaign-form');
+  form.reset();
+  document.querySelector('#campaign-dialog-title').textContent = campaign ? 'Editar campanha' : 'Registrar campanha';
+  form.querySelector('button[type="submit"]').innerHTML = campaign ? 'Salvar alterações <span>→</span>' : 'Salvar campanha <span>→</span>';
+  if (campaign) {
+    document.querySelector('#campaign-brand').value = campaign.brand_name;
+    document.querySelector('#campaign-title').value = campaign.title;
+    const stage = document.querySelector('#campaign-status');
+    if (![...stage.options].some((option) => option.value === campaign.status)) {
+      stage.append(Object.assign(document.createElement('option'), { value: campaign.status, textContent: campaignStatusLabels[campaign.status] || campaign.status }));
+    }
+    stage.value = campaign.status;
+    document.querySelector('#campaign-due').value = campaign.due_at || '';
+    document.querySelector('#campaign-deliverables').value = campaign.deliverables.map((item) => item.text).join('\n');
+    document.querySelector('#campaign-notes').value = campaign.notes || '';
+    document.querySelector('#campaign-contact-name').value = campaign.contact?.name || '';
+    document.querySelector('#campaign-contact-email').value = campaign.contact?.email || '';
+    document.querySelector('#campaign-contact-instagram').value = campaign.contact?.instagram || '';
+  }
+  campaignDialog.showModal();
+}
+document.querySelector('#campaign-new').addEventListener('click', () => openCampaignDialog());
 document.querySelector('#campaign-dialog-close').addEventListener('click', () => campaignDialog.close());
 document.querySelector('#campaign-filter').addEventListener('change', () => renderCampaigns());
 
@@ -1659,13 +1686,22 @@ document.querySelector('#campaign-form').addEventListener('submit', async (event
     contact: contact.name || contact.email || contact.instagram ? contact : null
   };
   try {
-    const result = await fetch('/api/campaigns', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    if (editingCampaignId) {
+      // Keep the done state of deliverables whose text did not change.
+      const current = campaignCache.find((item) => item.id === editingCampaignId);
+      body.deliverables = body.deliverables.map((text) => ({ text, done: Boolean(current?.deliverables.find((item) => item.text === text)?.done) }));
+    }
+    const result = await fetch(editingCampaignId ? `/api/campaigns/${editingCampaignId}` : '/api/campaigns', {
+      method: editingCampaignId ? 'PUT' : 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
     const data = await result.json();
     if (result.status === 401) { location.href = '/entrar.html?redirect=%2F'; return; }
     if (!result.ok) throw new Error(data.error || 'Não foi possível salvar a campanha.');
     document.querySelector('#campaign-form').reset();
     campaignDialog.close();
-    selectedCampaignId = data.id;
+    selectedCampaignId = editingCampaignId || data.id;
+    const wasEditing = Boolean(editingCampaignId);
+    editingCampaignId = null;
+    if (wasEditing) { await loadCampaigns(); announce('Campanha atualizada.'); return; }
     const group = Object.entries(campaignGroups).find(([, statuses]) => statuses?.includes(body.status))?.[0] || 'all';
     document.querySelector('#campaign-filter').value = group;
     await loadCampaigns();
