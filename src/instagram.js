@@ -126,6 +126,8 @@ async function connectStart(request, env, account) {
     await env.DB.batch([
       env.DB.prepare(`DELETE FROM instagram_oauth_states WHERE expires_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now')
         OR (consumed_at IS NOT NULL AND consumed_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now','-1 day'))`),
+      // A new attempt replaces an unfinished one, so a closed Instagram tab never blocks the creator.
+      env.DB.prepare("DELETE FROM instagram_oauth_states WHERE workspace_id=?1 AND consumed_at IS NULL").bind(account.workspace_id),
       env.DB.prepare(`INSERT INTO instagram_oauth_states (state_hash, workspace_id, expires_at)
         VALUES (?1, ?2, strftime('%Y-%m-%dT%H:%M:%fZ','now','+10 minutes'))`).bind(stateHash, account.workspace_id)
     ]);
