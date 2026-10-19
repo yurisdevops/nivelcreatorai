@@ -670,13 +670,40 @@ function renderIdeas(ideas) {
   });
 }
 
+function renderScriptOptions(scripts) {
+  let box = document.querySelector('#script-options');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'script-options';
+    box.className = 'script-options';
+    document.querySelector('#selected-script').before(box);
+  }
+  box.replaceChildren();
+  if (scripts.length < 2) return;
+  scripts.forEach((script, index) => {
+    const option = document.createElement('button');
+    option.type = 'button';
+    option.className = 'script-option';
+    option.dataset.id = script.id;
+    const number = document.createElement('span');
+    number.textContent = String(index + 1);
+    const title = document.createElement('b');
+    title.textContent = script.title;
+    const meta = document.createElement('small');
+    meta.textContent = [script.angle, script.duration_seconds ? `~${script.duration_seconds}s` : ''].filter(Boolean).join(' · ');
+    option.append(number, title, meta);
+    option.addEventListener('click', () => renderSelectedScript(script));
+    box.append(option);
+  });
+}
+
 function renderSelectedScript(script) {
   selectedScript = script;
   const box = document.querySelector('#selected-script');
   box.replaceChildren();
-  document.querySelector('#selected-script-title').textContent = script.campaign
-    ? `${script.title} · ${script.campaign.brand}`
-    : script.title;
+  const extras = [script.campaign?.brand, script.angle, script.duration_seconds ? `~${script.duration_seconds}s` : ''].filter(Boolean);
+  document.querySelector('#selected-script-title').textContent = [script.title, ...extras].join(' · ');
+  document.querySelectorAll('.script-option').forEach((option) => option.classList.toggle('active', option.dataset.id === script.id));
   document.querySelector('#copy-script').disabled = false;
   const steps = [
     ['1', 'Hook', [script.hook]],
@@ -736,6 +763,7 @@ async function generateScriptFromIdea(idea, button) {
     const brief = `${idea.title}. ${idea.description} Objetivo: ${document.querySelector('#studio-objective').value}.`.slice(0, 1200);
     const data = await postCreative('/api/creative/generate', { brief, format: document.querySelector('#creative-format').value });
     if (!data) return;
+    renderScriptOptions([]);
     renderSelectedScript(data.script);
     announce('Roteiro salvo no seu espaço para revisão.');
     moduleLoaded.roteiros = false;
@@ -789,15 +817,16 @@ document.querySelector('#campaign-script-form').addEventListener('submit', async
       }
     });
     if (!data) return;
+    renderScriptOptions(data.scripts || [data.script]);
     renderSelectedScript(data.script);
     document.querySelector('#selected-script-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    announce('Roteiro da campanha salvo para revisão.');
+    announce('3 ideias de roteiro salvas para revisão.');
     moduleLoaded.roteiros = false;
     await loadScripts();
   } catch (error) {
     announce(error.message || 'Não foi possível gerar o roteiro.');
   } finally {
-    setBusy(button, false, '<span>✦</span> Gerar roteiro da campanha <span>→</span>');
+    setBusy(button, false, '<span>✦</span> Gerar 3 roteiros da campanha <span>→</span>');
   }
 });
 
