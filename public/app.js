@@ -292,6 +292,7 @@ function showModule(name) {
   Object.entries(moduleViews).forEach(([key, element]) => { element.hidden = key !== name; });
   const labels = { roteiros: 'Estúdio Criativo', diagnostico: 'Diagnóstico IA', planejamento: 'Planejamento', calendario: 'Calendário', biblioteca: 'Biblioteca', resultados: 'Seus resultados', campanhas: 'Campanhas UGC', agente: 'Agente pessoal', configuracoes: 'Configurações', mediakit: 'Media kit' };
   document.querySelector('.crumb').innerHTML = `Seu espaço <span>/</span> ${labels[name]}`;
+  window.maybeStartPageGuide?.(name);
   if (moduleLoaded[name]) return;
   if (name === 'roteiros') { loadScripts(); loadScriptCampaigns(); }
   if (name === 'diagnostico') loadDiagnostics();
