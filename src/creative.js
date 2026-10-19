@@ -278,6 +278,28 @@ async function generateIdeas(env, account, profile, body) {
   }
 }
 
+// Creators can paste a script written elsewhere (another AI or by hand) to keep it with the campaign and use the teleprompter.
+async function saveManualScript(env, account, body) {
+  const title = typeof body.title === "string" ? body.title.trim() : "";
+  const text = typeof body.text === "string" ? body.text.replace(/\r/g, "").trim() : "";
+  if (!title || title.length > 140) throw new AuthError(400, "Dê um título de até 140 caracteres ao roteiro.");
+  if (text.length < 20 || text.length > 8000) throw new AuthError(400, "Cole um roteiro entre 20 e 8.000 caracteres.");
+  const format = FORMATS.includes(body.format) ? body.format : "Reels (vídeo curto)";
+  const campaign = await loadCampaignContext(env, account.workspace_id, typeof body.campaign_id === "string" && body.campaign_id ? body.campaign_id : null);
+  const blocks = text.split(/\n\s*\n/).map((block) => block.trim()).filter(Boolean);
+  const parts = blocks.length >= 3 ? blocks : text.split(/\n/).map((line) => line.trim()).filter(Boolean);
+  const hook = (parts[0] || text).slice(0, 500);
+  const middle = parts.length > 2 ? parts.slice(1, -1) : parts.slice(1);
+  const cta = parts.length > 2 ? parts[parts.length - 1].slice(0, 300) : "";
+  const scenes = middle.slice(0, 12).map((speech, index) => ({ moment: `Parte ${index + 1}`, visual: "", speech: speech.slice(0, 1200) }));
+  const content = { title, hook, scenes, cta, caption: "", hashtags: [], checklist: [], format, manual: true, full_text: text,
+    ...(campaign ? { campaign: { campaign_id: body.campaign_id, brand: campaign.brand, product: campaign.product } } : {}) };
+  const id = crypto.randomUUID();
+  await env.DB.prepare(`INSERT INTO scripts (id, workspace_id, version, status, content_json) VALUES (?1, ?2, 1, 'draft', ?3)`)
+    .bind(id, account.workspace_id, JSON.stringify(content)).run();
+  return { script: { id, ...content, status: "draft" } };
+}
+
 export async function creativeHandler(request, env, path, account) {
   const scriptMatch = path.match(/^\/api\/creative\/scripts\/([0-9a-f-]{36})$/i);
   if (scriptMatch) {
@@ -288,6 +310,11 @@ export async function creativeHandler(request, env, path, account) {
       .bind(scriptMatch[1], account.workspace_id).run();
     if (!result.meta?.changes) throw new AuthError(404, "Este roteiro não foi encontrado no seu espaço.");
     return { deleted: true };
+  }
+  if (path === "/api/creative/scripts/manual") {
+    if (request.method !== "POST") throw new AuthError(405, "Método não permitido.");
+    assertSameOrigin(request);
+    return saveManualScript(env, account, await readJson(request, 24576));
   }
   if (path !== "/api/creative/scripts" && path !== "/api/creative/generate" && path !== "/api/creative/ideas") return null;
   if (path === "/api/creative/ideas" && request.method !== "POST") throw new AuthError(405, "Método não permitido.");

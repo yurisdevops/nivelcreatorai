@@ -2818,3 +2818,34 @@ document.querySelector('#screenshot-save').addEventListener('click', async () =>
     banner.hidden = true;
   });
 })();
+
+// Paste a script made elsewhere; it is saved with the campaign and works with the teleprompter.
+async function fillManualCampaigns() {
+  const select = document.querySelector('#manual-campaign');
+  try {
+    const result = await fetch('/api/campaigns', { credentials: 'same-origin' });
+    if (!result.ok) return;
+    const { campaigns } = await result.json();
+    select.replaceChildren(Object.assign(document.createElement('option'), { value: '', textContent: 'Sem campanha' }));
+    for (const campaign of campaigns.filter((item) => item.status !== 'archived')) {
+      select.append(Object.assign(document.createElement('option'), { value: campaign.id, textContent: `${campaign.brand_name} · ${campaign.title}` }));
+    }
+  } catch { /* Keep "Sem campanha" only. */ }
+}
+document.querySelector('.manual-script').addEventListener('toggle', (event) => { if (event.target.open) fillManualCampaigns(); });
+document.querySelector('#manual-script-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  try {
+    const result = await fetch('/api/creative/scripts/manual', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: document.querySelector('#manual-title').value, text: document.querySelector('#manual-text').value,
+        campaign_id: document.querySelector('#manual-campaign').value, format: document.querySelector('#creative-format').value }) });
+    const data = await result.json().catch(() => ({}));
+    if (!result.ok) throw new Error(data.error || 'Não foi possível salvar o roteiro.');
+    document.querySelector('#manual-script-form').reset();
+    document.querySelector('.manual-script').open = false;
+    renderSelectedScript(data.script);
+    moduleLoaded.roteiros = false;
+    await loadScripts();
+    announce('Roteiro salvo. Use "🎬 Gravar" para abrir no teleprompter.');
+  } catch (error) { announce(error.message); }
+});

@@ -111,6 +111,13 @@
                 </form>
             </div>
             <div class="studio-pane" data-pane="saved" hidden>
+              <details class="panel manual-script"><summary>✎ Colar um roteiro meu (feito em outra IA ou por mim)</summary>
+                <form class="studio-form" id="manual-script-form">
+                  <div class="form-cols"><div><label for="manual-title">Título</label><input id="manual-title" maxlength="140" required placeholder="Ex.: Review do Sérum Chronos"></div><div><label for="manual-campaign">Campanha (opcional)</label><select id="manual-campaign"><option value="">Sem campanha</option></select></div></div>
+                  <label for="manual-text">Roteiro</label><textarea id="manual-text" maxlength="8000" rows="7" placeholder="Cole aqui. Separe as partes com uma linha em branco: a primeira vira o gancho, a última vira o CTA e o meio vira as cenas do teleprompter."></textarea>
+                  <button class="button button-primary" type="submit">Salvar roteiro <span>→</span></button>
+                </form>
+              </details>
               <section class="panel studio-results"><div class="panel-title"><div><p class="eyebrow">SEUS ROTEIROS</p><h2>Salvos para revisar</h2></div><span class="soft-icon">▤</span></div><div id="script-list" class="script-list"><div class="script-empty"><span>✧</span><b>Seu próximo roteiro começa com uma ideia.</b><p>Gere ideias ou um roteiro de campanha acima.</p></div></div></section>
             </div>
             <div class="studio-selected"><section class="panel" id="selected-script-panel"><div class="panel-title"><div><h2>▤ Roteiro selecionado</h2><p class="privacy-note" id="selected-script-title">Escolha uma ideia e clique em "Ver roteiro".</p></div><div class="selected-actions"><button class="button button-primary" id="teleprompter-open" type="button" disabled>🎬 Gravar com teleprompter</button><button class="button button-outline" id="copy-script" type="button" disabled>Copiar roteiro</button></div></div><div id="selected-script" class="script-steps"></div></section></div>

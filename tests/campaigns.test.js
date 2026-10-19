@@ -89,3 +89,15 @@ test("the AI checklist needs consent and stays inside the workspace", async () =
   await assert.rejects(campaignsHandler(request(`/api/campaigns/${id}/checklist`, "POST", {}), { DB: db }, `/api/campaigns/${id}/checklist`, { workspace_id: "other" }),
     (error) => error instanceof AuthError && error.status === 404);
 });
+
+test("a pasted script is split into hook, scenes and CTA without using AI quota", async () => {
+  const { creativeHandler } = await import("../src/creative.js");
+  const calls = [];
+  const db = { prepare: (sql) => ({ bind: (...params) => { calls.push({ sql, params }); return { run: async () => ({ meta: { changes: 1 } }), first: async () => null }; } }) };
+  const text = "Você ainda erra nisso?\n\nEu lavava o rosto três vezes.\n\nAgora uso o sérum.\n\nSalva para lembrar!";
+  const result = await creativeHandler(request("/api/creative/scripts/manual", "POST", { title: "Meu roteiro", text }), { DB: db }, "/api/creative/scripts/manual", account);
+  assert.equal(result.script.hook, "Você ainda erra nisso?");
+  assert.equal(result.script.scenes.length, 2);
+  assert.equal(result.script.cta, "Salva para lembrar!");
+  assert.ok(calls.every((call) => !call.sql.includes("quota_reservations")));
+});
