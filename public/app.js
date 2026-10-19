@@ -465,7 +465,12 @@ function renderScripts(scripts) {
       if (!confirm(`Excluir o roteiro "${script.title}"?`)) return;
       if (await deleteResource(`/api/creative/scripts/${script.id}`)) { announce('Roteiro excluído.'); card.remove(); }
     });
-    header.append(toggle, remove);
+    const record = document.createElement('button');
+    record.type = 'button';
+    record.className = 'text-button';
+    record.textContent = '🎬 Gravar';
+    record.addEventListener('click', () => window.openTeleprompter?.(script));
+    header.append(toggle, record, remove);
     const body = document.createElement('div');
     body.className = 'script-card-body';
     body.append(hookLabel, hook, scenesTitle, scenes, cta, captionTitle, caption);
@@ -1813,7 +1818,7 @@ function renderHomeDashboard(data) {
     if (row?.availability === 'available' && Number.isFinite(row.value)) {
       value.textContent = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1, notation: row.value >= 100000 ? 'compact' : 'standard' }).format(row.value);
       const synced = row.fetched_at ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(row.fetched_at)) : 'sem horário informado';
-      note.textContent = `${row.source} · ${row.period_start} a ${row.period_end} · sync ${synced}`;
+      note.textContent = row.source === 'print' ? 'Últimos 30 dias · do seu print' : 'Últimos 30 dias';
       if (Number.isFinite(row.change)) {
         const delta = document.createElement('span');
         delta.className = `metric-delta ${row.change >= 0 ? 'up' : 'down'}`;
@@ -2002,7 +2007,7 @@ async function loadInstagramConnection() {
         ? ' A última coleta falhou; uma nova tentativa será feita mais tarde.'
         : data.connection.last_error === 'insights_unavailable'
           ? ' A Meta não retornou algumas métricas; valores ausentes não são estimados.' : '';
-      status.textContent = `Conectado como @${data.connection.username} · última coleta: ${synced} · token válido até ${expires}.${issue}`;
+      status.textContent = `Conectado como @${data.connection.username}. Seus números são atualizados todo dia.${issue}`;
       onboardingStatus.textContent = `Conta conectada: @${data.connection.username}. Você pode seguir para confirmar seu perfil.`;
       onboardingConnect.disabled = true;
       onboardingConnect.textContent = 'Instagram conectado ✓';
@@ -2708,3 +2713,108 @@ document.querySelector('#mediakit-autofill').addEventListener('click', () => {
   if (document.querySelector('#mk-bio').value.trim() && !confirm('Substituir o que já está preenchido pelos dados do seu perfil?')) return;
   autofillMediaKit(true);
 });
+
+// Insights screenshot: the AI reads the numbers and the creator confirms before saving.
+const shotDialog = document.querySelector('#screenshot-dialog');
+const shotFile = document.querySelector('#screenshot-file');
+const shotStatus = document.querySelector('#screenshot-status');
+const shotMetrics = ['followers', 'reach', 'views', 'interactions', 'profile_visits'];
+let shotImage = null;
+let shotPeriodDays = null;
+
+function compressScreenshot(file) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const scale = Math.min(1, 1440 / Math.max(image.width, image.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(image.width * scale);
+      canvas.height = Math.round(image.height * scale);
+      canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(image.src);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    image.onerror = () => reject(new Error('Não foi possível abrir essa imagem.'));
+    image.src = URL.createObjectURL(file);
+  });
+}
+
+document.querySelector('#screenshot-open').addEventListener('click', () => {
+  shotImage = null;
+  shotFile.value = '';
+  document.querySelector('#screenshot-preview').hidden = true;
+  document.querySelector('#screenshot-result').hidden = true;
+  document.querySelector('#screenshot-read').disabled = true;
+  document.querySelector('#screenshot-file-label').textContent = 'Toque para escolher o print';
+  shotStatus.textContent = '';
+  shotDialog.showModal();
+});
+document.querySelector('#screenshot-close').addEventListener('click', () => shotDialog.close());
+shotFile.addEventListener('change', async () => {
+  const file = shotFile.files?.[0];
+  if (!file) return;
+  try {
+    shotImage = await compressScreenshot(file);
+    const preview = document.querySelector('#screenshot-preview');
+    preview.src = shotImage;
+    preview.hidden = false;
+    document.querySelector('#screenshot-file-label').textContent = file.name;
+    document.querySelector('#screenshot-read').disabled = false;
+    shotStatus.textContent = '';
+  } catch (error) { shotStatus.textContent = error.message; }
+});
+document.querySelector('#screenshot-read').addEventListener('click', async (event) => {
+  const button = event.currentTarget;
+  if (!shotImage) return;
+  button.disabled = true;
+  button.textContent = 'Lendo o print…';
+  shotStatus.textContent = '';
+  try {
+    const result = await fetch('/api/instagram/screenshot', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ mime: 'image/jpeg', image: shotImage.split(',')[1] }) });
+    const data = await result.json().catch(() => ({}));
+    if (result.status === 403 && /Autorize/.test(data.error || '')) { shotDialog.close(); openOnboarding(); throw new Error('Para usar a IA, complete seu perfil e marque a autorização de uso da IA.'); }
+    if (!result.ok) throw new Error(data.error || 'Não foi possível ler o print.');
+    shotPeriodDays = data.period_days;
+    for (const key of shotMetrics) document.querySelector(`#shot-${key}`).value = data.metrics[key] ?? '';
+    document.querySelector('#screenshot-result').hidden = false;
+    const found = shotMetrics.filter((key) => data.metrics[key] !== null).length;
+    shotStatus.textContent = `Encontrei ${found} de 5 números. Confira e complete o que faltar.`;
+  } catch (error) { shotStatus.textContent = error.message || 'Não foi possível ler o print.'; announce(shotStatus.textContent); }
+  finally { button.disabled = false; button.innerHTML = '✦ Ler números do print'; }
+});
+document.querySelector('#screenshot-save').addEventListener('click', async () => {
+  const metrics = {};
+  for (const key of shotMetrics) {
+    const raw = document.querySelector(`#shot-${key}`).value.replace(/[^0-9]/g, '');
+    metrics[key] = raw ? Number(raw) : null;
+  }
+  try {
+    const result = await fetch('/api/instagram/screenshot/confirm', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ metrics, period_days: shotPeriodDays }) });
+    const data = await result.json().catch(() => ({}));
+    if (!result.ok) throw new Error(data.error || 'Não foi possível salvar.');
+    shotDialog.close();
+    announce('Números salvos! Seu painel foi atualizado.');
+    await loadHomeDashboard();
+  } catch (error) { shotStatus.textContent = error.message; }
+});
+
+// Home banner inviting the creator to turn on phone notifications.
+(function setupPushBanner() {
+  const banner = document.querySelector('#push-banner');
+  let dismissed = false;
+  try { dismissed = localStorage.getItem('nivel-push-banner-dismissed') === '1'; } catch { /* ignore */ }
+  const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  if (dismissed || !supported || Notification.permission !== 'default') return;
+  banner.hidden = false;
+  document.querySelector('#push-banner-close').addEventListener('click', () => {
+    banner.hidden = true;
+    try { localStorage.setItem('nivel-push-banner-dismissed', '1'); } catch { /* ignore */ }
+  });
+  document.querySelector('#push-banner-enable').addEventListener('click', () => {
+    pushToggle.checked = true;
+    pushToggle.dispatchEvent(new Event('change'));
+    banner.hidden = true;
+  });
+})();

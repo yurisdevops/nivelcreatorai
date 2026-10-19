@@ -59,7 +59,8 @@
             <div class="setup-icon">✦</div><div class="setup-copy"><b>Vamos deixar este espaço com a sua cara?</b><p>Conte seu nicho, seus objetivos e como você gosta de se comunicar.</p></div><button class="button button-dark" data-open-onboarding>Começar configuração <span>→</span></button>
           </section>
 
-          <section class="section-heading instagram-heading"><div><p class="eyebrow">SEU INSTAGRAM</p><h2>Panorama da conta</h2><p id="instagram-connection-status" class="privacy-note" role="status">Conexão profissional ainda não configurada.</p></div><div class="instagram-connect-controls"><label class="instagram-consent"><input id="instagram-insights-consent" type="checkbox"> Autorizo a leitura de dados básicos e insights da minha conta profissional.</label><div><button class="button button-outline" id="connect-instagram" type="button">Conectar Instagram <span>↗</span></button><button class="button button-outline" id="disconnect-instagram" type="button" hidden>Desconectar</button></div></div></section>
+          <section class="push-banner" id="push-banner" hidden><span class="bar-icon">🔔</span><div><b>Ative os avisos no celular</b><small>Lembretes de prazo de campanha, conteúdos do dia e a sua análise da semana.</small></div><button class="button button-primary" id="push-banner-enable" type="button">Ativar avisos</button><button class="close-button" id="push-banner-close" type="button" aria-label="Agora não">×</button></section>
+          <section class="section-heading instagram-heading"><div><p class="eyebrow">SEU INSTAGRAM</p><h2>Panorama da conta</h2><p id="instagram-connection-status" class="privacy-note" role="status">Conexão profissional ainda não configurada.</p></div><div class="instagram-connect-controls"><label class="instagram-consent"><input id="instagram-insights-consent" type="checkbox"> Autorizo a leitura de dados básicos e insights da minha conta profissional.</label><div><button class="button button-primary" id="screenshot-open" type="button">📷 Enviar print dos insights</button><button class="button button-outline" id="connect-instagram" type="button">Conectar Instagram <span>↗</span></button><button class="button button-outline" id="disconnect-instagram" type="button" hidden>Desconectar</button></div></div></section>
           <section class="metrics-grid" aria-label="Métricas do Instagram">
             <article class="metric-card"><div class="metric-label">Alcance <span class="metric-symbol">↗</span></div><strong id="metric-reach">—</strong><p id="metric-reach-note">Conecte sua conta para ver este dado.</p></article>
             <article class="metric-card"><div class="metric-label">Visualizações <span class="metric-symbol">▶</span></div><strong id="metric-views">—</strong><p id="metric-views-note">Visualizações dos seus conteúdos.</p></article>
@@ -244,6 +245,31 @@
       <button class="mobile-tab mobile-more" id="mobile-more" type="button" aria-label="Abrir mais opções" aria-expanded="false" aria-controls="sidebar"><span aria-hidden="true">☰</span><small>Mais</small></button>
     </nav>
 
+    <dialog class="campaign-dialog" id="screenshot-dialog">
+      <div class="studio-form">
+        <div class="panel-title"><div><p class="eyebrow">SEUS NÚMEROS</p><h2>Enviar print dos insights</h2></div><button class="close-button" type="button" id="screenshot-close" aria-label="Fechar">×</button></div>
+        <ol class="shot-steps">
+          <li>No Instagram, abra seu perfil → <b>Painel profissional</b> → <b>Insights da conta</b> (ou "Ver tudo").</li>
+          <li>Escolha <b>Últimos 30 dias</b> e tire um print da tela de visão geral (com alcance, interações e seguidores).</li>
+          <li>Envie aqui. A IA lê os números e você confere antes de salvar.</li>
+        </ol>
+        <label class="shot-drop" for="screenshot-file"><input id="screenshot-file" type="file" accept="image/png,image/jpeg,image/webp"><span id="screenshot-file-label">Toque para escolher o print</span></label>
+        <img id="screenshot-preview" class="shot-preview" alt="Prévia do print" hidden>
+        <button class="button button-primary" id="screenshot-read" type="button" disabled>✦ Ler números do print</button>
+        <div id="screenshot-result" hidden>
+          <p class="form-section">Confira os números (corrija se precisar)</p>
+          <div class="form-cols three">
+            <div><label for="shot-followers">Seguidores</label><input id="shot-followers" inputmode="numeric"></div>
+            <div><label for="shot-reach">Alcance</label><input id="shot-reach" inputmode="numeric"></div>
+            <div><label for="shot-views">Visualizações</label><input id="shot-views" inputmode="numeric"></div>
+            <div><label for="shot-interactions">Interações</label><input id="shot-interactions" inputmode="numeric"></div>
+            <div><label for="shot-profile_visits">Visitas ao perfil</label><input id="shot-profile_visits" inputmode="numeric"></div>
+          </div>
+          <button class="button button-primary" id="screenshot-save" type="button">Salvar números <span>→</span></button>
+        </div>
+        <p class="privacy-note" id="screenshot-status" role="status"></p>
+      </div>
+    </dialog>
     <dialog class="onboarding-dialog" id="onboarding">
       <form method="dialog" class="dialog-top"><span class="dialog-logo">✦ Seu perfil de creator</span><button class="close-button" aria-label="Fechar">×</button></form>
       <div class="dialog-content">

@@ -19,9 +19,10 @@ import { instagramCallback, instagramHandler, refreshInstagramTokens, syncInstag
 import { filesHandler } from "./files.js";
 import { assertBetaApproved, waitlistHandler } from "./waitlist.js";
 import { mediaKitHandler, renderPublicMediaKit } from "./mediakit.js";
+import { screenshotsHandler } from "./screenshots.js";
 
 const securityHeaders = {
-  "content-security-policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data:; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' https://static.cloudflareinsights.com; connect-src 'self' https://cloudflareinsights.com",
+  "content-security-policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data: blob:; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' https://static.cloudflareinsights.com; connect-src 'self' https://cloudflareinsights.com",
   "referrer-policy": "strict-origin-when-cross-origin",
   "x-content-type-options": "nosniff",
   "x-frame-options": "DENY",
@@ -351,7 +352,11 @@ export default {
         const { user, cookies } = await requireUser(request, env);
         const workspace = await getWorkspace(env, user.id);
         if (!workspace) throw new AuthError(404, "Seu espaço não foi encontrado.");
-        const result = await instagramHandler(request, env, url.pathname, workspace);
+        if (request.method === "POST" && url.pathname === "/api/instagram/screenshot") {
+          await enforceRateLimit(env.AI_RATE_LIMITER, `${workspace.workspace_id}:${url.pathname}`, "leitura de prints neste espaço");
+        }
+        const result = await screenshotsHandler(request, env, url.pathname, workspace)
+          || await instagramHandler(request, env, url.pathname, workspace);
         if (result) return response(result, 200, cookies);
       }
 

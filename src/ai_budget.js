@@ -26,9 +26,9 @@ function pricing(env, tier = "complex") {
   return { budgetMicroUsd: Math.floor(dailyUsd * 1_000_000), inputUsdPerMillion, outputUsdPerMillion };
 }
 
-export function serializeAiRequest(payload) {
+export function serializeAiRequest(payload, maxBytes = MAX_INPUT_BYTES) {
   const body = JSON.stringify(payload);
-  if (new TextEncoder().encode(body).byteLength > MAX_INPUT_BYTES) {
+  if (new TextEncoder().encode(body).byteLength > maxBytes) {
     throw new AuthError(413, "O contexto enviado à IA excede o limite técnico permitido.", "ai_payload_too_large");
   }
   return body;
@@ -95,7 +95,7 @@ async function recordCircuitFailure(env, probeToken) {
   await (probeToken ? statement.bind(probeToken) : statement).run();
 }
 
-export async function requestGemini(env, model, payload, unavailableMessage) {
+export async function requestGemini(env, model, payload, unavailableMessage, { maxBytes } = {}) {
   const provider = env.GEMINI_PROVIDER || "gemini-api";
   const vertex = provider === "vertex";
   if (!env.GEMINI_API_KEY || (vertex && !env.GOOGLE_CLOUD_PROJECT)) {
@@ -113,7 +113,8 @@ export async function requestGemini(env, model, payload, unavailableMessage) {
   const apiUrl = vertex
     ? `https://aiplatform.googleapis.com/v1/projects/${encodeURIComponent(env.GOOGLE_CLOUD_PROJECT)}/locations/${encodeURIComponent(env.GOOGLE_CLOUD_LOCATION || "global")}/publishers/google/models/${encodeURIComponent(model)}:generateContent`
     : `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
-  const body = serializeAiRequest(requestPayload);
+  // Image requests (screenshots) may pass a larger byte limit; text requests keep the default.
+  const body = serializeAiRequest(requestPayload, maxBytes);
   // Keys pasted into a terminal often carry quotes, spaces or line breaks, which make the header invalid.
   const apiKey = String(env.GEMINI_API_KEY).trim().replace(/^["']|["']$/g, "");
   const probeToken = await acquireCircuitProbe(env);
