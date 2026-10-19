@@ -200,3 +200,4 @@ body{background:radial-gradient(ellipse at 64% 0,#11163a 0,#070d20 43%,#060a17 1
 .mediakit-form textarea{min-height:80px!important}
 .sidebar-close{display:none}
 @media (max-width:900px){.sidebar.open .sidebar-close{display:grid;place-items:center;position:absolute;top:14px;right:14px;width:40px;height:40px;border:1px solid #263762;border-radius:11px;background:#0b1530;color:#eef1ff;font-size:24px;line-height:1;z-index:2}.sidebar.open+.sidebar-backdrop,.sidebar.open::after{content:none}}
+.topbar .page-guide{order:3;flex:0 0 40px;width:40px;height:40px;display:grid;place-items:center;margin-right:8px;border:1px solid #263762;border-radius:11px;background:#0b1530;color:#d3a8ff;font:800 16px Manrope;cursor:pointer}.topbar .page-guide:hover{color:#fff;border-color:#8a5bff}
