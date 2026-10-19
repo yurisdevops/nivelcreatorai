@@ -2595,3 +2595,69 @@ document.querySelector('#mediakit-form').addEventListener('submit', async (event
 });
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+
+// Phone notifications through Web Push. On iPhone they only work once the app is installed on the home screen.
+function pushKey(base64) {
+  const padded = (base64 + '='.repeat((4 - (base64.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/');
+  return Uint8Array.from(atob(padded), (char) => char.charCodeAt(0));
+}
+const pushToggle = document.querySelector('#push-enabled');
+const pushNote = document.querySelector('#push-note');
+async function refreshPushToggle() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+    pushToggle.disabled = true;
+    pushNote.innerHTML = 'No iPhone, <a href="/instalar">instale o app na tela inicial</a> para receber avisos.';
+    return;
+  }
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+    pushToggle.checked = Boolean(subscription) && Notification.permission === 'granted';
+    document.querySelector('#push-test').hidden = !pushToggle.checked;
+    if (Notification.permission === 'denied') {
+      pushToggle.disabled = true;
+      pushNote.textContent = 'As notificações estão bloqueadas nas configurações do navegador para este site.';
+    }
+  } catch { /* Keep the toggle unchecked when the browser cannot report the state. */ }
+}
+pushToggle.addEventListener('change', async () => {
+  pushToggle.disabled = true;
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    if (pushToggle.checked) {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') throw new Error('Permita as notificações quando o navegador perguntar.');
+      const config = await fetch('/api/notifications/push', { credentials: 'same-origin' }).then((result) => result.json());
+      if (!config.available || !config.public_key) throw new Error('Os avisos no celular ainda não estão disponíveis.');
+      const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pushKey(config.public_key) });
+      const result = await fetch('/api/notifications/push', { method: 'POST', credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' }, body: JSON.stringify(subscription.toJSON()) });
+      if (!result.ok) throw new Error((await result.json()).error || 'Não foi possível ativar os avisos.');
+      announce('Avisos no celular ativados.');
+      document.querySelector('#push-test').hidden = false;
+    } else {
+      const subscription = await registration.pushManager.getSubscription();
+      if (subscription) {
+        await fetch('/api/notifications/push', { method: 'DELETE', credentials: 'same-origin',
+          headers: { 'content-type': 'application/json' }, body: JSON.stringify({ endpoint: subscription.endpoint }) });
+        await subscription.unsubscribe();
+      }
+      announce('Avisos no celular desativados.');
+      document.querySelector('#push-test').hidden = true;
+    }
+  } catch (error) {
+    pushToggle.checked = !pushToggle.checked;
+    announce(error.message || 'Não foi possível alterar os avisos.');
+  } finally {
+    pushToggle.disabled = false;
+  }
+});
+refreshPushToggle();
+document.querySelector('#push-test').addEventListener('click', async () => {
+  try {
+    const result = await fetch('/api/notifications/push/test', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: '{}' });
+    const data = await result.json();
+    if (!result.ok) throw new Error(data.error || 'Não foi possível enviar o teste.');
+    announce('Aviso de teste enviado. Ele chega em alguns segundos.');
+  } catch (error) { announce(error.message); }
+});

@@ -12,6 +12,7 @@
     "GOOGLE_CLOUD_LOCATION": "global",
     "DATA_RETENTION_ENABLED": "false",
     "BETA_INVITE_ONLY": "true",
+    "VAPID_PUBLIC_KEY": "BEq16ZbWky9qIxepRCfKzTZm_4Uz75PVoo7m80QNyKWYZwAi3diQDSUIa12IcKRbyl37tVhHtIaQfJ2N1qrUyp0",
     "AI_DAILY_BUDGET_USD": "3",
     "GEMINI_COMPLEX_MODEL": "gemini-3.8-flash",
     "GEMINI_SIMPLE_MODEL": "gemini-3.5-flash-lite",

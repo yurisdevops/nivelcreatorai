@@ -1,4 +1,5 @@
 import { AuthError, assertSameOrigin, readJson } from "./auth.js";
+import { pushConfigured, sendPush } from "./webpush.js";
 
 const emailAddressPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -101,10 +102,86 @@ async function deliverTrialReminderEmails(env) {
   }
 }
 
+
+// Brazil has no daylight saving time, so UTC-3 is a stable local clock for reminders.
+function brazilDate(offsetDays = 0) {
+  const now = new Date(Date.now() - 3 * 3600 * 1000 + offsetDays * 86400 * 1000);
+  return now.toISOString().slice(0, 10);
+}
+
+async function createWorkReminders(db) {
+  const today = brazilDate();
+  const tomorrow = brazilDate(1);
+  const hourBrazil = new Date(Date.now() - 3 * 3600 * 1000).getUTCHours();
+  const statements = [
+    db.prepare(`INSERT INTO notifications (id, workspace_id, kind, content_json, dedupe_key)
+      SELECT 'campaign-due:' || c.id || ':' || c.due_at, c.workspace_id, 'campaign_due',
+        json_object('title', CASE WHEN c.due_at=?1 THEN 'Entrega hoje: ' ELSE 'Entrega amanhã: ' END || c.brand_name,
+          'body', COALESCE(json_extract(c.brief_json, '$.title'), c.brand_name) || ' tem prazo ' ||
+            CASE WHEN c.due_at=?1 THEN 'hoje' ELSE 'amanhã' END || '. Confira os entregáveis que faltam.',
+          'action_url', '/#campanhas'),
+        'campaign-due:' || c.id || ':' || c.due_at
+      FROM campaigns c LEFT JOIN notification_preferences p ON p.workspace_id=c.workspace_id
+      WHERE c.status IN ('draft','submitted','negotiation','in_progress') AND c.due_at IN (?1, ?2)
+        AND COALESCE(p.in_app_enabled,1)=1
+      ON CONFLICT DO NOTHING`).bind(today, tomorrow)
+  ];
+  if (hourBrazil >= 8) {
+    statements.push(db.prepare(`INSERT INTO notifications (id, workspace_id, kind, content_json, dedupe_key)
+      SELECT 'content-today:' || e.workspace_id || ':' || ?1, e.workspace_id, 'content_today',
+        json_object('title', 'Conteúdos de hoje',
+          'body', CASE WHEN COUNT(*)=1 THEN 'Você tem 1 conteúdo planejado para hoje: ' || MIN(e.title) || '.'
+            ELSE 'Você tem ' || COUNT(*) || ' conteúdos planejados para hoje. Bora gravar!' END,
+          'action_url', '/#planejamento'),
+        'content-today:' || e.workspace_id || ':' || ?1
+      FROM calendar_events e LEFT JOIN notification_preferences p ON p.workspace_id=e.workspace_id
+      WHERE e.status <> 'published' AND date(e.scheduled_at, '-3 hours') = ?1 AND COALESCE(p.in_app_enabled,1)=1
+      GROUP BY e.workspace_id
+      ON CONFLICT DO NOTHING`).bind(today));
+  }
+  await db.batch(statements);
+}
+
+async function deliverPushNotifications(env) {
+  if (!pushConfigured(env)) return;
+  const { results } = await env.DB.prepare(`SELECT n.id, n.workspace_id, n.content_json FROM notifications n
+    WHERE n.push_sent_at IS NULL AND julianday(n.created_at) >= julianday('now','-2 days')
+      AND EXISTS (SELECT 1 FROM push_subscriptions s WHERE s.workspace_id=n.workspace_id)
+    ORDER BY n.created_at LIMIT 50`).all();
+  for (const row of results || []) {
+    // Mark first so a slow or failing push service never sends the same reminder twice.
+    const claimed = await env.DB.prepare(`UPDATE notifications SET push_sent_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+      WHERE id=?1 AND push_sent_at IS NULL`).bind(row.id).run();
+    if (!claimed.meta?.changes) continue;
+    let content = {};
+    try { content = JSON.parse(row.content_json); } catch { continue; }
+    const { results: subscriptions } = await env.DB.prepare(`SELECT id, endpoint, p256dh, auth FROM push_subscriptions
+      WHERE workspace_id=?1 LIMIT 10`).bind(row.workspace_id).all();
+    for (const subscription of subscriptions || []) {
+      try {
+        const response = await sendPush(env, subscription, {
+          title: String(content.title || "Nível Creator").slice(0, 120),
+          body: String(content.body || "").slice(0, 300),
+          url: typeof content.action_url === "string" && content.action_url.startsWith("/") ? content.action_url : "/"
+        });
+        if (response.status === 404 || response.status === 410) {
+          await env.DB.prepare("DELETE FROM push_subscriptions WHERE id=?1").bind(subscription.id).run();
+        } else if (!response.ok) {
+          console.error("push_delivery_error", { status: response.status });
+        }
+      } catch (error) {
+        console.error("push_delivery_error", { kind: error?.name });
+      }
+    }
+  }
+}
+
 export async function notificationCronHandler(env) {
   if (!env.DB) return;
   await createTrialReminders(env.DB);
+  await createWorkReminders(env.DB);
   await deliverTrialReminderEmails(env);
+  await deliverPushNotifications(env);
 }
 
 export async function notificationHandler(request, env, path, account) {
@@ -170,6 +247,48 @@ export async function notificationHandler(request, env, path, account) {
       const exists = await db.prepare("SELECT id FROM notifications WHERE id=?1 AND workspace_id=?2").bind(match[1], workspaceId).first();
       if (!exists) throw new AuthError(404, "Notificação não encontrada.");
     }
+    return { saved: true };
+  }
+  if (path === "/api/notifications/push" && request.method === "GET") {
+    const row = await db.prepare("SELECT COUNT(*) AS count FROM push_subscriptions WHERE workspace_id=?1").bind(workspaceId).first();
+    return { available: pushConfigured(env), public_key: env.VAPID_PUBLIC_KEY || null, devices: row?.count || 0 };
+  }
+  if (path === "/api/notifications/push/test" && request.method === "POST") {
+    assertSameOrigin(request);
+    await readJson(request);
+    if (!pushConfigured(env)) throw new AuthError(503, "As notificações no celular ainda não estão disponíveis.");
+    const { results } = await db.prepare("SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE workspace_id=?1 LIMIT 10")
+      .bind(workspaceId).all();
+    if (!results?.length) throw new AuthError(400, "Ative os avisos no celular antes de enviar um teste.");
+    let delivered = 0;
+    for (const subscription of results) {
+      const response = await sendPush(env, subscription, { title: "Avisos ativados ✨", body: "Assim chegam os lembretes de prazos e conteúdos do dia.", url: "/" });
+      if (response.ok) delivered += 1;
+      else if (response.status === 404 || response.status === 410) {
+        await db.prepare("DELETE FROM push_subscriptions WHERE id=?1").bind(subscription.id).run();
+      } else console.error("push_delivery_error", { status: response.status });
+    }
+    if (!delivered) throw new AuthError(502, "O serviço de avisos do celular não aceitou o envio. Desative e ative de novo.");
+    return { delivered };
+  }
+  if (path === "/api/notifications/push" && (request.method === "POST" || request.method === "DELETE")) {
+    assertSameOrigin(request);
+    const body = await readJson(request);
+    const endpoint = typeof body.endpoint === "string" ? body.endpoint : "";
+    let endpointUrl;
+    try { endpointUrl = new URL(endpoint); } catch { throw new AuthError(400, "Inscrição de notificação inválida."); }
+    if (endpointUrl.protocol !== "https:" || endpoint.length > 1000) throw new AuthError(400, "Inscrição de notificação inválida.");
+    if (request.method === "DELETE") {
+      await db.prepare("DELETE FROM push_subscriptions WHERE endpoint=?1 AND workspace_id=?2").bind(endpoint, workspaceId).run();
+      return { saved: true };
+    }
+    if (!pushConfigured(env)) throw new AuthError(503, "As notificações no celular ainda não estão disponíveis.");
+    const p256dh = typeof body.keys?.p256dh === "string" ? body.keys.p256dh : "";
+    const auth = typeof body.keys?.auth === "string" ? body.keys.auth : "";
+    if (!/^[A-Za-z0-9_-]{80,100}$/.test(p256dh) || !/^[A-Za-z0-9_-]{16,30}$/.test(auth)) throw new AuthError(400, "Inscrição de notificação inválida.");
+    await db.prepare(`INSERT INTO push_subscriptions (id, workspace_id, endpoint, p256dh, auth) VALUES (?1, ?2, ?3, ?4, ?5)
+      ON CONFLICT(endpoint) DO UPDATE SET workspace_id=excluded.workspace_id, p256dh=excluded.p256dh, auth=excluded.auth`)
+      .bind(crypto.randomUUID(), workspaceId, endpoint, p256dh, auth).run();
     return { saved: true };
   }
   if (path.startsWith("/api/notifications")) throw new AuthError(405, "Rota ou método não disponível.");
