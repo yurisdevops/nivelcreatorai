@@ -242,6 +242,7 @@ function setSidebarOpen(open) {
   mobileMore.setAttribute('aria-expanded', String(open));
 }
 menuToggle.addEventListener('click', () => setSidebarOpen(!sidebar.classList.contains('open')));
+document.querySelector('#sidebar-close').addEventListener('click', () => setSidebarOpen(false));
 mobileMore.addEventListener('click', () => setSidebarOpen(!sidebar.classList.contains('open')));
 document.addEventListener('click', (event) => {
   if (sidebar.classList.contains('open') && !sidebar.contains(event.target) && !menuToggle.contains(event.target) && !mobileMore.contains(event.target)) {
