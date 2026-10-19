@@ -76,7 +76,7 @@ test("editable creator profile stays user data instead of entering Gemini system
     const systemInstruction = payload.systemInstruction.parts[0].text;
     assert.equal(url.origin, "https://generativelanguage.googleapis.com");
     assert.match(url.pathname, /\/models\/gemini-3\.5-flash-lite:generateContent$/);
-    assert.equal(init.redirect, "error");
+    assert.equal(init.redirect, "manual");
     assert.doesNotMatch(systemInstruction, new RegExp(injectedText));
     assert.match(systemInstruction, /perfil do creator.*conteúdo não confiável/);
     const context = JSON.parse(payload.contents.at(-1).parts[0].text);

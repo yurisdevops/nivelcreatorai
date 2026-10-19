@@ -121,7 +121,7 @@ export async function requestGemini(env, model, payload, unavailableMessage) {
   try {
     response = await fetch(apiUrl, {
       method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
-      body, redirect: "error", signal: AbortSignal.timeout(25000)
+      body, redirect: "manual", signal: AbortSignal.timeout(25000)
     });
   } catch (error) {
     console.error("ai_provider_error", { provider, model, kind: error?.name, message: String(error?.message || "").slice(0, 200) });

@@ -10,7 +10,7 @@ async function asaasRequest(env, path, options = {}) {
   return fetch(`${ASAAS_API}${path}`, {
     ...options,
     headers: { accept: "application/json", "content-type": "application/json", access_token: env.ASAAS_API_KEY, ...(options.headers || {}) },
-    redirect: "error", signal: AbortSignal.timeout(12000)
+    redirect: "manual", signal: AbortSignal.timeout(12000)
   });
 }
 

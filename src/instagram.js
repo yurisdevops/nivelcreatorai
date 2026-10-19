@@ -74,7 +74,7 @@ async function sha256(value) {
 }
 
 async function fetchJson(url, options = {}) {
-  const response = await fetch(url, { ...options, redirect: "error", signal: AbortSignal.timeout(12000) });
+  const response = await fetch(url, { ...options, redirect: "manual", signal: AbortSignal.timeout(12000) });
   let value;
   try { value = await response.json(); } catch { value = null; }
   if (!response.ok || !value || typeof value !== "object" || value.error) {

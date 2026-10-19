@@ -185,7 +185,7 @@ async function deleteAuthUser(env, userId) {
   const result = await fetch(`${base.origin}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
     method: "DELETE",
     headers: { apikey: env.SUPABASE_SECRET_KEY, authorization: `Bearer ${env.SUPABASE_SECRET_KEY}` },
-    redirect: "error", signal: AbortSignal.timeout(10000)
+    redirect: "manual", signal: AbortSignal.timeout(10000)
   });
   if (result.ok || result.status === 404) return;
   throw new Error(`auth_${result.status}`);

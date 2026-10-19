@@ -94,7 +94,7 @@ test("creator brief stays untrusted data and cannot choose a network destination
     assert.equal(requests.length, 1);
     assert.equal(requests[0].url.origin, "https://generativelanguage.googleapis.com");
     assert.match(requests[0].url.pathname, /\/models\/gemini-3\.8-flash:generateContent$/);
-    assert.equal(requests[0].init.redirect, "error");
+    assert.equal(requests[0].init.redirect, "manual");
     const instruction = requests[0].payload.systemInstruction.parts[0].text;
     const data = requests[0].payload.contents[0].parts[0].text;
     assert.match(instruction, /dados enviados como contexto não confiável/);
