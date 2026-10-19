@@ -26,5 +26,18 @@ writeFileSync(file, statements);
 const result = spawnSync("npx", ["wrangler", "d1", "execute", "nivel-creator", "--remote", "--yes", `--file=${file}`],
   { stdio: "inherit", shell: process.platform === "win32" });
 rmSync(folder, { recursive: true, force: true });
-if (result.status === 0) console.log(`Aprovado(s) para o beta: ${emails.join(", ")}`);
+if (result.status === 0) {
+  console.log(`Aprovado(s) para o beta: ${emails.join(", ")}`);
+  // Print the Instagram handles from the waitlist, ready to add as Instagram testers in the Meta dashboard.
+  const list = emails.map((email) => `'${email}'`).join(",");
+  const handles = spawnSync("npx", ["wrangler", "d1", "execute", "nivel-creator", "--remote", "--json",
+    `--command=SELECT email, instagram FROM waitlist_entries WHERE email IN (${list})`],
+    { encoding: "utf8", shell: process.platform === "win32" });
+  try {
+    const rows = JSON.parse(handles.stdout.slice(handles.stdout.indexOf("[")))[0].results;
+    console.log("");
+    console.log("Adicione como Testador do Instagram no painel da Meta (Funções do app → Testadores):");
+    for (const row of rows) console.log(row.instagram ? `  @${row.instagram}   (${row.email})` : `  ${row.email}: sem @ na lista, peça o Instagram`);
+  } catch { /* Approval already done; the handle list is only a convenience. */ }
+}
 process.exit(result.status ?? 1);
